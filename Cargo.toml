@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "probe-rs-rtt",
+    "rtthost",
+]
+
+[patch.crates-io]
+probe-rs-rtt = { path = "./probe-rs-rtt" }

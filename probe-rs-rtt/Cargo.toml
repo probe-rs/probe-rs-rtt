@@ -1,0 +1,9 @@
+[package]
+authors = ["Matti Virkkunen <mvirkkunen@gmail.com>"]
+edition = "2018"
+name = "probe-rs-rtt"
+version = "0.1.0"
+
+[dependencies]
+probe-rs = "0.5.1"
+thiserror = "1.0.11"

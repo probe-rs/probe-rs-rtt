@@ -1,0 +1,11 @@
+[package]
+name = "rtt-host"
+version = "0.1.0"
+authors = ["Matti Virkkunen <mvirkkunen@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+pretty_env_logger = "0.4.0"
+probe-rs = "0.5.1"
+probe-rs-rtt = "0.1.0"
+structopt = "0.3.11"
