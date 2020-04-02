@@ -1,11 +1,7 @@
+use probe_rs::{config::MemoryRegion, Core, Session};
 use std::cmp::min;
 use std::collections::BTreeMap;
 use std::convert::TryInto;
-use probe_rs::{
-    Core,
-    Session,
-    config::MemoryRegion,
-};
 use thiserror::Error;
 
 pub struct Rtt<'c> {
@@ -22,7 +18,7 @@ pub struct Rtt<'c> {
 // struct Rtt {
 //     char id[16]; // Used to find/validate the control block. Must equal "SEGGER RTT\0\0\0\0\0\0".
 //     // Maximum number of up (target to host) channels in following array
-//     unsigned int max_up_channels; 
+//     unsigned int max_up_channels;
 //     // Maximum number of down (host to target) channels in following array.
 //     unsigned int max_down_channels;
 //     RttChannel up_channels[max_up_channels]; // Array of up (target to host) channels.
@@ -41,9 +37,12 @@ impl Rtt<'_> {
 
     const RTT_ID: [u8; 16] = *b"SEGGER RTT\0\0\0\0\0\0";
 
-    fn from<'c>(core: &'c Core, memory_map: &[MemoryRegion], ptr: u32, mem: &[u8])
-        -> Result<Option<Rtt<'c>>, Error>
-    {
+    fn from<'c>(
+        core: &'c Core,
+        memory_map: &[MemoryRegion],
+        ptr: u32,
+        mem: &[u8],
+    ) -> Result<Option<Rtt<'c>>, Error> {
         // Validate that the control block starts with the ID bytes
         if mem[Self::O_ID..(Self::O_ID + Self::RTT_ID.len())] != Self::RTT_ID {
             return Ok(None);
@@ -69,11 +68,8 @@ impl Rtt<'_> {
         for i in 0..max_up_channels {
             let offset = Self::O_CHANNEL_ARRAYS + i * RttChannel::SIZE;
 
-            if let Some(buf) = RttChannel::from(
-                core,
-                memory_map,
-                ptr + offset as u32, 
-                &mem[offset..])?
+            if let Some(buf) =
+                RttChannel::from(core, memory_map, ptr + offset as u32, &mem[offset..])?
             {
                 rtt.up_channels.insert(i, buf);
             }
@@ -84,11 +80,8 @@ impl Rtt<'_> {
                 + (max_up_channels * RttChannel::SIZE)
                 + i * RttChannel::SIZE;
 
-            if let Some(buf) = RttChannel::from(
-                core,
-                memory_map,
-                ptr + offset as u32,
-                &mem[offset..])?
+            if let Some(buf) =
+                RttChannel::from(core, memory_map, ptr + offset as u32, &mem[offset..])?
             {
                 rtt.down_channels.insert(i, buf);
             }
@@ -114,10 +107,10 @@ impl Rtt<'_> {
                         core,
                         memory_map,
                         range.start + offset as u32,
-                        &mem[offset..])?
-                    {
+                        &mem[offset..],
+                    )? {
                         instances.push(rtt);
-                        
+
                         if instances.len() > 5 {
                             break 'out;
                         }
@@ -131,12 +124,9 @@ impl Rtt<'_> {
         }
 
         if instances.len() > 1 {
-            return Err(
-                Error::MultipleControlBlocksFound(
-                    instances
-                        .into_iter()
-                        .map(|i| i.ptr)
-                        .collect()));
+            return Err(Error::MultipleControlBlocksFound(
+                instances.into_iter().map(|i| i.ptr).collect(),
+            ));
         }
 
         Ok(instances.remove(0))
@@ -182,7 +172,7 @@ pub struct RttChannel {
 //     unsigned int write; // Offset in data buffer of next byte to write.
 //     unsigned int read; // Offset in data buffer of next byte to read.
 //     // The low 2 bits of flags are used for blocking/non blocking modes, the rest are ignored.
-//     unsigned int flags; 
+//     unsigned int flags;
 // }
 
 impl RttChannel {
@@ -197,9 +187,12 @@ impl RttChannel {
     const O_READ: usize = 16;
     const O_FLAGS: usize = 20;
 
-    fn from(core: &Core, memory_map: &[MemoryRegion], ptr: u32, mem: &[u8])
-        -> Result<Option<RttChannel>, Error>
-    {
+    fn from(
+        core: &Core,
+        memory_map: &[MemoryRegion],
+        ptr: u32,
+        mem: &[u8],
+    ) -> Result<Option<RttChannel>, Error> {
         let buffer_ptr = mem.get_u32(Self::O_BUFFER_PTR);
         if buffer_ptr == 0 {
             // This buffer isn't in use
@@ -244,7 +237,7 @@ impl RttChannel {
             0 => RttChannelMode::NoBlockSkip,
             1 => RttChannelMode::NoBlockTrim,
             2 => RttChannelMode::BlockIfFifoFull,
-            _ => RttChannelMode::Invalid
+            _ => RttChannelMode::Invalid,
         }
     }
 
@@ -262,13 +255,17 @@ impl RttChannel {
             // Buffer is empty - do nothing.
             return Ok(0);
         }
-        
+
         let mut total = 0;
 
         // Read while buffer contains data and output buffer has space (maximum of two iterations)
         while write != read && buf.len() > 0 {
             // Number of contiguous bytes available to read
-            let count = if read > write { self.size - read } else { write - read } as usize;
+            let count = if read > write {
+                self.size - read
+            } else {
+                write - read
+            } as usize;
 
             core.read_8(self.buffer_ptr + read, &mut buf[..count])?;
 
@@ -291,9 +288,11 @@ impl RttChannel {
 }
 
 /// Reads a null-terminated string from target memory. Lossy UTF-8 decoding is used.
-fn read_c_string(core: &Core, memory_map: &[MemoryRegion], ptr: u32)
-    -> Result<Option<String>, Error>
-{
+fn read_c_string(
+    core: &Core,
+    memory_map: &[MemoryRegion],
+    ptr: u32,
+) -> Result<Option<String>, Error> {
     // Find out which memory range contains the pointer
     let range = memory_map
         .iter()
@@ -334,13 +333,19 @@ trait SliceExt {
 
 impl SliceExt for &[u8] {
     fn get_u32(&self, offset: usize) -> u32 {
-        u32::from_le_bytes((&self[offset..offset + 4]).try_into().expect("Invalid read offset"))
+        u32::from_le_bytes(
+            (&self[offset..offset + 4])
+                .try_into()
+                .expect("Invalid read offset"),
+        )
     }
 }
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("RTT control block not found in memory. Make sure you've initialized RTT on the target.")]
+    #[error(
+        "RTT control block not found in memory. Make sure you've initialized RTT on the target."
+    )]
     ControlBlockNotFound,
 
     #[error("Multiple control blocks found in memory.")]

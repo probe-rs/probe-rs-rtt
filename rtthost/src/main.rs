@@ -1,10 +1,7 @@
+use probe_rs::{config::TargetSelector, DebugProbeInfo, Probe};
 use std::collections::BTreeMap;
 use std::io::prelude::*;
 use std::io::stdout;
-use probe_rs::{
-    DebugProbeInfo, Probe,
-    config::TargetSelector,
-};
 use structopt::StructOpt;
 
 use probe_rs_rtt::{Rtt, RttChannel};
@@ -30,25 +27,35 @@ impl std::str::FromStr for ProbeInfo {
 }
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "rtthost", about = "Host program for debugging microcontrollers using the RTT (real-time transfer) protocol.")]
+#[structopt(
+    name = "rtthost",
+    about = "Host program for debugging microcontrollers using the RTT (real-time transfer) protocol."
+)]
 struct Opts {
     #[structopt(
         short,
         long,
-        default_value="0",
-        help="Specify probe number or 'list' to list probes.")]
+        default_value = "0",
+        help = "Specify probe number or 'list' to list probes."
+    )]
     probe: ProbeInfo,
 
     #[structopt(
         short,
         long,
-        help="Target chip name. Leave unspecified to auto-detect.")]
+        help = "Target chip name. Leave unspecified to auto-detect."
+    )]
     target: Option<String>,
 
-    #[structopt(short, long, help="List RTT channels and exit.")]
+    #[structopt(short, long, help = "List RTT channels and exit.")]
     list: bool,
 
-    #[structopt(short, long, default_value="0", help="Number of up channel to output.")]
+    #[structopt(
+        short,
+        long,
+        default_value = "0",
+        help = "Number of up channel to output."
+    )]
     up: usize,
 }
 
@@ -60,19 +67,19 @@ fn main() {
 
 fn run() -> i32 {
     let opts = Opts::from_args();
-    
+
     let probes = Probe::list_all();
 
     if probes.len() == 0 {
         eprintln!("No debug probes available. Make sure your probe is plugged in, supported and up-to-date.");
         return 1;
     }
-    
+
     let probe_number = match opts.probe {
         ProbeInfo::List => {
             list_probes(std::io::stdout(), &probes);
             return 0;
-        },
+        }
         ProbeInfo::Number(i) => i,
     };
 
@@ -87,10 +94,11 @@ fn run() -> i32 {
         Err(err) => {
             eprintln!("Error opening probe: {}", err);
             return 1;
-        },
+        }
     };
 
-    let target_selector = opts.target
+    let target_selector = opts
+        .target
         .clone()
         .map(|t| TargetSelector::Unspecified(t))
         .unwrap_or(TargetSelector::Auto);
@@ -107,7 +115,7 @@ fn run() -> i32 {
             }
 
             return 1;
-        },
+        }
     };
 
     let core = match session.attach_to_core(0) {
@@ -115,7 +123,7 @@ fn run() -> i32 {
         Err(err) => {
             eprintln!("Error attaching to core 0: {}", err);
             return 1;
-        },
+        }
     };
 
     eprintln!("Attaching to RTT...");
@@ -125,7 +133,7 @@ fn run() -> i32 {
         Err(err) => {
             eprintln!("Error attaching to RTT: {}", err);
             return 1;
-        },
+        }
     };
 
     if opts.list {
@@ -148,7 +156,6 @@ fn run() -> i32 {
             }
         };
 
-
         if let Err(err) = stdout().write_all(&buf[..count]) {
             eprintln!("Error writing output: {}", err);
             return 1;
@@ -165,7 +172,13 @@ fn list_probes(mut stream: impl std::io::Write, probes: &Vec<DebugProbeInfo>) {
             "  {}: {} {}",
             i,
             probe.identifier,
-            probe.serial_number.as_ref().map(|s| &**s).unwrap_or("(no serial number)")).unwrap();
+            probe
+                .serial_number
+                .as_ref()
+                .map(|s| &**s)
+                .unwrap_or("(no serial number)")
+        )
+        .unwrap();
     }
 }
 
@@ -175,6 +188,7 @@ fn list_channels(channels: &BTreeMap<usize, RttChannel>) {
             "  {}: {} ({} byte buffer)",
             i,
             chan.name().as_ref().map(|s| &**s).unwrap_or("(no name)"),
-            chan.buffer_size());
+            chan.buffer_size()
+        );
     }
 }
