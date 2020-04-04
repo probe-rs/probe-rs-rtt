@@ -167,8 +167,11 @@ fn run() -> i32 {
         }
     }
 
+    println!("Attached.");
+
     let mut up_buf = [0u8; 1024];
     let mut down_buf = vec![];
+
     loop {
         let count = match rtt.read(0, up_buf.as_mut()) {
             Ok(count) => count,
@@ -178,12 +181,15 @@ fn run() -> i32 {
             }
         };
 
-        if let Err(err) = stdout().write_all(&up_buf[..count]) {
-            eprintln!("Error writing to stdout: {}", err);
-            return 1;
+        match stdout().write_all(&up_buf[..count]) {
+            Ok(_) => {
+                stdout().flush().ok();
+            }
+            Err(err) => {
+                eprintln!("Error writing to stdout: {}", err);
+                return 1;
+            }
         }
-
-        stdout().flush().ok();
 
         if let Some(stdin) = &stdin {
             if let Ok(bytes) = stdin.try_recv() {
@@ -247,11 +253,11 @@ fn stdin_channel() -> Receiver<Vec<u8>> {
             match stdin().read(&mut buf[..]) {
                 Ok(count) => {
                     tx.send(buf[..count].to_vec()).unwrap();
-                },
+                }
                 Err(err) => {
                     eprintln!("Error reading from stdin, input disabled: {}", err);
                     break;
-                },
+                }
             }
         }
     });

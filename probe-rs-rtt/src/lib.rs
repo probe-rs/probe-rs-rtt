@@ -68,9 +68,14 @@ impl Rtt<'_> {
         for i in 0..max_up_channels {
             let offset = Self::O_CHANNEL_ARRAYS + i * RttChannel::SIZE;
 
-            if let Some(buf) =
-                RttChannel::from(core, memory_map, ptr + offset as u32, &mem[offset..])?
-            {
+            if let Some(buf) = RttChannel::from(
+                i,
+                Direction::Up,
+                core,
+                memory_map,
+                ptr + offset as u32,
+                &mem[offset..],
+            )? {
                 rtt.up_channels.insert(i, buf);
             }
         }
@@ -80,9 +85,14 @@ impl Rtt<'_> {
                 + (max_up_channels * RttChannel::SIZE)
                 + i * RttChannel::SIZE;
 
-            if let Some(buf) =
-                RttChannel::from(core, memory_map, ptr + offset as u32, &mem[offset..])?
-            {
+            if let Some(buf) = RttChannel::from(
+                i,
+                Direction::Down,
+                core,
+                memory_map,
+                ptr + offset as u32,
+                &mem[offset..],
+            )? {
                 rtt.down_channels.insert(i, buf);
             }
         }
@@ -163,8 +173,9 @@ impl Rtt<'_> {
     }
 }
 
-#[derive(Debug)]
 pub struct RttChannel {
+    number: usize,
+    direction: Direction,
     ptr: u32,
     name: Option<String>,
     buffer_ptr: u32,
@@ -198,6 +209,8 @@ impl RttChannel {
     const O_FLAGS: usize = 20;
 
     fn from(
+        number: usize,
+        direction: Direction,
         core: &Core,
         memory_map: &[MemoryRegion],
         ptr: u32,
@@ -218,6 +231,8 @@ impl RttChannel {
         };
 
         Ok(Some(RttChannel {
+            number,
+            direction,
             ptr,
             name,
             buffer_ptr: mem.get_u32(Self::O_BUFFER_PTR),
@@ -253,13 +268,7 @@ impl RttChannel {
 
     // This method should only be called for up channels.
     fn read(&self, core: &Core, mut buf: &mut [u8]) -> Result<usize, Error> {
-        // Read current write/read pointer from target
-
-        let mut block = [0u8; 8];
-        core.read_8(self.ptr + Self::O_WRITE as u32, block.as_mut())?;
-
-        let write = block.as_ref().get_u32(0);
-        let mut read = block.as_ref().get_u32(4);
+        let (write, mut read) = self.read_pointers(core)?;
 
         if self.readable_contiguous(write, read) == 0 {
             // Buffer is empty - do nothing.
@@ -296,13 +305,7 @@ impl RttChannel {
 
     // This method should only be called for down channels.
     fn write(&self, core: &Core, mut buf: &[u8]) -> Result<usize, Error> {
-        // Read current write/read pointer from target
-
-        let mut block = [0u8; 8];
-        core.read_8(self.ptr + Self::O_WRITE as u32, block.as_mut())?;
-
-        let mut write = block.as_ref().get_u32(0);
-        let read = block.as_ref().get_u32(4);
+        let (mut write, read) = self.read_pointers(core)?;
 
         if self.writable_contiguous(write, read) == 0 {
             // Buffer is full - do nothing.
@@ -354,6 +357,35 @@ impl RttChannel {
             self.size - write
         }) as usize
     }
+
+    fn read_pointers(&self, core: &Core) -> Result<(u32, u32), Error> {
+        let mut block = [0u8; 8];
+        core.read_8(self.ptr + Self::O_WRITE as u32, block.as_mut())?;
+
+        let write = block.as_ref().get_u32(0);
+        let read = block.as_ref().get_u32(4);
+
+        let validate = |which, value| {
+            if value >= self.size {
+                Err(Error::ControlBlockCorrupted(format!(
+                    "{} pointer is {} while buffer size is {} for {:?} channel {} ({})",
+                    which,
+                    value,
+                    self.size,
+                    self.direction,
+                    self.number,
+                    self.name().unwrap_or("no name"),
+                )))
+            } else {
+                Ok(())
+            }
+        };
+
+        validate("write", write)?;
+        validate("read", read)?;
+
+        Ok((write, read))
+    }
 }
 
 /// Reads a null-terminated string from target memory. Lossy UTF-8 decoding is used.
@@ -396,6 +428,12 @@ pub enum RttChannelMode {
     Invalid,
 }
 
+#[derive(Debug)]
+enum Direction {
+    Up,
+    Down,
+}
+
 trait SliceExt {
     fn get_u32(&self, offset: usize) -> u32;
 }
@@ -422,6 +460,9 @@ pub enum Error {
 
     #[error("Invalid channel number.")]
     NoSuchChannel,
+
+    #[error("Control block corrupted: {0}")]
+    ControlBlockCorrupted(String),
 
     #[error("Error communicating with probe: {0}")]
     Probe(#[from] probe_rs::Error),
