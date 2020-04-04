@@ -142,14 +142,24 @@ impl Rtt<'_> {
         &self.down_channels
     }
 
-    /// Reads bytes from an up (target to host) channels and returns the number of bytes read.
+    /// Reads bytes from an up (target to host) channel and returns the number of bytes read.
     pub fn read(&mut self, channel: usize, data: &mut [u8]) -> Result<usize, Error> {
         let core = self.core;
 
         self.up_channels
-            .get_mut(&channel)
+            .get(&channel)
             .ok_or_else(|| Error::NoSuchChannel)
             .and_then(|buf| buf.read(core, data))
+    }
+
+    /// Writes bytes to a down (host to target) channel and returns the number of bytes written.
+    pub fn write(&mut self, channel: usize, data: &[u8]) -> Result<usize, Error> {
+        let core = self.core;
+
+        self.down_channels
+            .get(&channel)
+            .ok_or_else(|| Error::NoSuchChannel)
+            .and_then(|buf| buf.write(core, data))
     }
 }
 
@@ -251,7 +261,7 @@ impl RttChannel {
         let write = block.as_ref().get_u32(0);
         let mut read = block.as_ref().get_u32(4);
 
-        if write == read {
+        if self.readable_contiguous(write, read) == 0 {
             // Buffer is empty - do nothing.
             return Ok(0);
         }
@@ -259,13 +269,11 @@ impl RttChannel {
         let mut total = 0;
 
         // Read while buffer contains data and output buffer has space (maximum of two iterations)
-        while write != read && buf.len() > 0 {
-            // Number of contiguous bytes available to read
-            let count = if read > write {
-                self.size - read
-            } else {
-                write - read
-            } as usize;
+        while buf.len() > 0 {
+            let count = min(self.readable_contiguous(write, read), buf.len());
+            if count == 0 {
+                break;
+            }
 
             core.read_8(self.buffer_ptr + read, &mut buf[..count])?;
 
@@ -284,6 +292,67 @@ impl RttChannel {
         core.write_8(self.ptr + Self::O_READ as u32, &read.to_le_bytes())?;
 
         Ok(total)
+    }
+
+    // This method should only be called for down channels.
+    fn write(&self, core: &Core, mut buf: &[u8]) -> Result<usize, Error> {
+        // Read current write/read pointer from target
+
+        let mut block = [0u8; 8];
+        core.read_8(self.ptr + Self::O_WRITE as u32, block.as_mut())?;
+
+        let mut write = block.as_ref().get_u32(0);
+        let read = block.as_ref().get_u32(4);
+
+        if self.writable_contiguous(write, read) == 0 {
+            // Buffer is full - do nothing.
+            return Ok(0);
+        }
+
+        let mut total = 0;
+
+        // Write while buffer has space for data and output contains data (maximum of two iterations)
+        while buf.len() > 0 {
+            let count = min(self.writable_contiguous(write, read), buf.len());
+            if count == 0 {
+                break;
+            }
+
+            core.write_8(self.buffer_ptr + write, &buf[..count])?;
+
+            total += count;
+            write += count as u32;
+
+            if write >= self.size {
+                // Wrap around to start
+                write = 0;
+            }
+
+            buf = &buf[count..];
+        }
+
+        // Write write pointer back to target
+        core.write_8(self.ptr + Self::O_WRITE as u32, &write.to_le_bytes())?;
+
+        Ok(total)
+    }
+
+    /// Calculates amount of contiguous data available for reading
+    fn readable_contiguous(&self, write: u32, read: u32) -> usize {
+        (if read > write {
+            self.size - read
+        } else {
+            write - read
+        }) as usize
+    }
+
+    /// Calculates amount of contiguous space available for writing
+    fn writable_contiguous(&self, write: u32, read: u32) -> usize {
+        (if read > write {
+            read - write - 1
+        } else {
+            self.size - write
+        }) as usize
     }
 }
 

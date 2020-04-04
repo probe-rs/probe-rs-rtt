@@ -1,7 +1,9 @@
 use probe_rs::{config::TargetSelector, DebugProbeInfo, Probe};
 use std::collections::BTreeMap;
 use std::io::prelude::*;
-use std::io::stdout;
+use std::io::{stdin, stdout};
+use std::sync::mpsc::{channel, Receiver};
+use std::thread;
 use structopt::StructOpt;
 
 use probe_rs_rtt::{Rtt, RttChannel};
@@ -57,6 +59,13 @@ struct Opts {
         help = "Number of up channel to output."
     )]
     up: usize,
+
+    #[structopt(
+        short,
+        long,
+        help = "Number of down channel for keyboard input. Defaults to 0 if it exists."
+    )]
+    down: Option<usize>,
 }
 
 fn main() {
@@ -146,9 +155,22 @@ fn run() -> i32 {
         return 0;
     }
 
-    let mut buf = [0u8; 1024];
+    let down_channel = opts.down.unwrap_or(0);
+    let mut stdin = None;
+
+    if rtt.down_channels().contains_key(&down_channel) {
+        stdin = Some(stdin_channel());
+    } else {
+        if opts.down.is_some() {
+            eprintln!("Error: down channel {} does not exist.", down_channel);
+            return 1;
+        }
+    }
+
+    let mut up_buf = [0u8; 1024];
+    let mut down_buf = vec![];
     loop {
-        let count = match rtt.read(0, buf.as_mut()) {
+        let count = match rtt.read(0, up_buf.as_mut()) {
             Ok(count) => count,
             Err(err) => {
                 eprintln!("\nError reading from RTT: {}", err);
@@ -156,9 +178,31 @@ fn run() -> i32 {
             }
         };
 
-        if let Err(err) = stdout().write_all(&buf[..count]) {
-            eprintln!("Error writing output: {}", err);
+        if let Err(err) = stdout().write_all(&up_buf[..count]) {
+            eprintln!("Error writing to stdout: {}", err);
             return 1;
+        }
+
+        stdout().flush().ok();
+
+        if let Some(stdin) = &stdin {
+            if let Ok(bytes) = stdin.try_recv() {
+                down_buf.extend_from_slice(bytes.as_slice());
+            }
+
+            if !down_buf.is_empty() {
+                let count = match rtt.write(0, down_buf.as_mut()) {
+                    Ok(count) => count,
+                    Err(err) => {
+                        eprintln!("\nError writing to RTT: {}", err);
+                        return 1;
+                    }
+                };
+
+                if count > 0 {
+                    down_buf.drain(..count);
+                }
+            }
         }
     }
 }
@@ -191,4 +235,26 @@ fn list_channels(channels: &BTreeMap<usize, RttChannel>) {
             chan.buffer_size()
         );
     }
+}
+
+fn stdin_channel() -> Receiver<Vec<u8>> {
+    let (tx, rx) = channel();
+
+    thread::spawn(move || {
+        let mut buf = [0u8; 1024];
+
+        loop {
+            match stdin().read(&mut buf[..]) {
+                Ok(count) => {
+                    tx.send(buf[..count].to_vec()).unwrap();
+                },
+                Err(err) => {
+                    eprintln!("Error reading from stdin, input disabled: {}", err);
+                    break;
+                },
+            }
+        }
+    });
+
+    rx
 }
