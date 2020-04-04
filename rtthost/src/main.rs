@@ -55,10 +55,9 @@ struct Opts {
     #[structopt(
         short,
         long,
-        default_value = "0",
-        help = "Number of up channel to output."
+        help = "Number of up channel to output. Defaults to 0 if it exists."
     )]
-    up: usize,
+    up: Option<usize>,
 
     #[structopt(
         short,
@@ -155,49 +154,67 @@ fn run() -> i32 {
         return 0;
     }
 
-    let down_channel = opts.down.unwrap_or(0);
-    let mut stdin = None;
-
-    if rtt.down_channels().contains_key(&down_channel) {
-        stdin = Some(stdin_channel());
-    } else {
-        if opts.down.is_some() {
-            eprintln!("Error: down channel {} does not exist.", down_channel);
+    let up_channel = if let Some(up) = opts.up {
+        if !rtt.up_channels().contains_key(&up) {
+            eprintln!("Error: up channel {} does not exist.", up);
             return 1;
         }
-    }
 
-    println!("Attached.");
+        Some(up)
+    } else if rtt.up_channels().contains_key(&0) {
+        Some(0)
+    } else {
+        None
+    };
+
+    let down_channel = if let Some(down) = opts.down {
+        if !rtt.down_channels().contains_key(&down) {
+            eprintln!("Error: down channel {} does not exist.", down);
+            return 1;
+        }
+
+        Some(down)
+    } else if rtt.down_channels().contains_key(&0) {
+        Some(0)
+    } else {
+        None
+    };
+
+    let stdin = down_channel.map(|_| stdin_channel());
+
+    eprintln!("Attached.");
 
     let mut up_buf = [0u8; 1024];
     let mut down_buf = vec![];
 
     loop {
-        let count = match rtt.read(0, up_buf.as_mut()) {
-            Ok(count) => count,
-            Err(err) => {
-                eprintln!("\nError reading from RTT: {}", err);
-                return 1;
-            }
-        };
+        if let Some(up_channel) = up_channel {
+            let count = match rtt.read(up_channel, up_buf.as_mut()) {
+                Ok(count) => count,
+                Err(err) => {
+                    eprintln!("\nError reading from RTT: {}", err);
+                    return 1;
+                }
+            };
 
-        match stdout().write_all(&up_buf[..count]) {
-            Ok(_) => {
-                stdout().flush().ok();
-            }
-            Err(err) => {
-                eprintln!("Error writing to stdout: {}", err);
-                return 1;
+            match stdout().write_all(&up_buf[..count]) {
+                Ok(_) => {
+                    stdout().flush().ok();
+                }
+                Err(err) => {
+                    eprintln!("Error writing to stdout: {}", err);
+                    return 1;
+                }
             }
         }
 
-        if let Some(stdin) = &stdin {
+        if let (Some(down_channel), Some(stdin)) = (down_channel, &stdin) {
             if let Ok(bytes) = stdin.try_recv() {
                 down_buf.extend_from_slice(bytes.as_slice());
             }
 
             if !down_buf.is_empty() {
-                let count = match rtt.write(0, down_buf.as_mut()) {
+                let count = match rtt.write(down_channel, down_buf.as_mut()) {
                     Ok(count) => count,
                     Err(err) => {
                         eprintln!("\nError writing to RTT: {}", err);
