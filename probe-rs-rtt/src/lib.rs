@@ -353,6 +353,8 @@ impl RttChannel {
     fn writable_contiguous(&self, write: u32, read: u32) -> usize {
         (if read > write {
             read - write - 1
+        } else if read == 0 {
+            self.size - write - 1
         } else {
             self.size - write
         }) as usize
