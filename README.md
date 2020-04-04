@@ -1,10 +1,9 @@
 # probe-rs-rtt
 
-Library for interfacing with the SEGGER RTT (Real-time transfer) protocol over probe-rs.
+Library for interfacing with the RTT (Real-Time Transfer) debugging protocol over probe-rs.
 
 ## TODO
 
-- "Down" channels
 - Virtual terminal support for channel 0
 - Support for filters to limit where to scan for the "control block"
   - Specific memory address (range)
