@@ -45,9 +45,9 @@ struct Opts {
     #[structopt(
         short,
         long,
-        help = "Target chip name. Leave unspecified to auto-detect."
+        help = "Target chip type. Leave unspecified to auto-detect."
     )]
-    target: Option<String>,
+    chip: Option<String>,
 
     #[structopt(short, long, help = "List RTT channels and exit.")]
     list: bool,
@@ -106,7 +106,7 @@ fn run() -> i32 {
     };
 
     let target_selector = opts
-        .target
+        .chip
         .clone()
         .map(|t| TargetSelector::Unspecified(t))
         .unwrap_or(TargetSelector::Auto);
@@ -116,9 +116,9 @@ fn run() -> i32 {
         Err(err) => {
             eprintln!("Error creating debug session: {}", err);
 
-            if opts.target.is_none() {
+            if opts.chip.is_none() {
                 if let probe_rs::Error::ChipNotFound(_) = err {
-                    eprintln!("Hint: Use '--target' to specify the target chip type manually");
+                    eprintln!("Hint: Use '--chip' to specify the target chip type manually");
                 }
             }
 
