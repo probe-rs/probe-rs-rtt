@@ -1,12 +1,10 @@
 use probe_rs::{config::TargetSelector, DebugProbeInfo, Probe};
-use std::collections::BTreeMap;
 use std::io::prelude::*;
 use std::io::{stdin, stdout};
 use std::sync::mpsc::{channel, Receiver};
 use std::thread;
+use probe_rs_rtt::{Rtt, Channels, RttChannel};
 use structopt::StructOpt;
-
-use probe_rs_rtt::{Rtt, RttChannel};
 
 #[derive(Debug, PartialEq, Eq)]
 enum ProbeInfo {
@@ -155,32 +153,32 @@ fn run() -> i32 {
     }
 
     let up_channel = if let Some(up) = opts.up {
-        if !rtt.up_channels().contains_key(&up) {
+        let chan = rtt.up_channels().take(up);
+
+        if chan.is_none() {
             eprintln!("Error: up channel {} does not exist.", up);
             return 1;
         }
 
-        Some(up)
-    } else if rtt.up_channels().contains_key(&0) {
-        Some(0)
+        chan
     } else {
-        None
+        rtt.up_channels().take(0)
     };
 
     let down_channel = if let Some(down) = opts.down {
-        if !rtt.down_channels().contains_key(&down) {
-            eprintln!("Error: down channel {} does not exist.", down);
+        let chan = rtt.down_channels().take(down);
+
+        if chan.is_none() {
+            eprintln!("Error: up channel {} does not exist.", down);
             return 1;
         }
 
-        Some(down)
-    } else if rtt.down_channels().contains_key(&0) {
-        Some(0)
+        chan
     } else {
-        None
+        rtt.down_channels().take(0)
     };
 
-    let stdin = down_channel.map(|_| stdin_channel());
+    let stdin = down_channel.as_ref().map(|_| stdin_channel());
 
     eprintln!("Attached.");
 
@@ -188,8 +186,8 @@ fn run() -> i32 {
     let mut down_buf = vec![];
 
     loop {
-        if let Some(up_channel) = up_channel {
-            let count = match rtt.read(up_channel, up_buf.as_mut()) {
+        if let Some(up_channel) = up_channel.as_ref() {
+            let count = match up_channel.read(up_buf.as_mut()) {
                 Ok(count) => count,
                 Err(err) => {
                     eprintln!("\nError reading from RTT: {}", err);
@@ -208,13 +206,13 @@ fn run() -> i32 {
             }
         }
 
-        if let (Some(down_channel), Some(stdin)) = (down_channel, &stdin) {
+        if let (Some(down_channel), Some(stdin)) = (down_channel.as_ref(), &stdin) {
             if let Ok(bytes) = stdin.try_recv() {
                 down_buf.extend_from_slice(bytes.as_slice());
             }
 
             if !down_buf.is_empty() {
-                let count = match rtt.write(down_channel, down_buf.as_mut()) {
+                let count = match down_channel.write(down_buf.as_mut()) {
                     Ok(count) => count,
                     Err(err) => {
                         eprintln!("\nError writing to RTT: {}", err);
@@ -249,13 +247,18 @@ fn list_probes(mut stream: impl std::io::Write, probes: &Vec<DebugProbeInfo>) {
     }
 }
 
-fn list_channels(channels: &BTreeMap<usize, RttChannel>) {
+fn list_channels(channels: &Channels<impl RttChannel>) {
+    if channels.is_empty() {
+        println!("  (none)");
+        return;
+    }
+
     for (i, chan) in channels.iter() {
         println!(
-            "  {}: {} ({} byte buffer)",
+            "  {}: {} (buffer size {})",
             i,
             chan.name().as_ref().map(|s| &**s).unwrap_or("(no name)"),
-            chan.buffer_size()
+            chan.buffer_size(),
         );
     }
 }
