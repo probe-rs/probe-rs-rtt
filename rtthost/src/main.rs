@@ -136,7 +136,7 @@ fn run() -> i32 {
 
     eprintln!("Attaching to RTT...");
 
-    let mut rtt = match Rtt::attach(&core, &session) {
+    let mut rtt = match Rtt::attach(core, &session) {
         Ok(rtt) => rtt,
         Err(err) => {
             eprintln!("Error attaching to RTT: {}", err);

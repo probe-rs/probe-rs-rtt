@@ -2,11 +2,11 @@ use probe_rs::{config::MemoryRegion, Core, Session};
 use std::cmp::min;
 use std::collections::BTreeMap;
 use std::convert::TryInto;
+use std::rc::Rc;
 use thiserror::Error;
 
-pub struct Rtt<'c> {
+pub struct Rtt {
     ptr: u32,
-    core: &'c Core,
     up_channels: BTreeMap<usize, RttChannel>,
     down_channels: BTreeMap<usize, RttChannel>,
 }
@@ -25,7 +25,7 @@ pub struct Rtt<'c> {
 //     RttChannel down_channels[max_down_channels]; // array of down (host to target) channels.
 // }
 
-impl Rtt<'_> {
+impl Rtt {
     // Minimum size of struct in target memory in bytes with empty arrays
     const MIN_SIZE: usize = Self::O_CHANNEL_ARRAYS;
 
@@ -37,12 +37,12 @@ impl Rtt<'_> {
 
     const RTT_ID: [u8; 16] = *b"SEGGER RTT\0\0\0\0\0\0";
 
-    fn from<'c>(
-        core: &'c Core,
+    fn from(
+        core: &Rc<Core>,
         memory_map: &[MemoryRegion],
         ptr: u32,
         mem: &[u8],
-    ) -> Result<Option<Rtt<'c>>, Error> {
+    ) -> Result<Option<Rtt>, Error> {
         // Validate that the control block starts with the ID bytes
         if mem[Self::O_ID..(Self::O_ID + Self::RTT_ID.len())] != Self::RTT_ID {
             return Ok(None);
@@ -60,7 +60,6 @@ impl Rtt<'_> {
 
         let mut rtt = Rtt {
             ptr,
-            core,
             up_channels: BTreeMap::new(),
             down_channels: BTreeMap::new(),
         };
@@ -69,9 +68,9 @@ impl Rtt<'_> {
             let offset = Self::O_CHANNEL_ARRAYS + i * RttChannel::SIZE;
 
             if let Some(buf) = RttChannel::from(
+                &core,
                 i,
                 Direction::Up,
-                core,
                 memory_map,
                 ptr + offset as u32,
                 &mem[offset..],
@@ -86,9 +85,9 @@ impl Rtt<'_> {
                 + i * RttChannel::SIZE;
 
             if let Some(buf) = RttChannel::from(
+                &core,
                 i,
                 Direction::Down,
-                core,
                 memory_map,
                 ptr + offset as u32,
                 &mem[offset..],
@@ -100,10 +99,15 @@ impl Rtt<'_> {
         Ok(Some(rtt))
     }
 
-    pub fn attach<'c>(core: &'c Core, session: &Session) -> Result<Rtt<'c>, Error> {
+    /// Searches for the RTT control block in the core and session and returns an instance if a
+    /// valid control block was found. `core` can be for instance an owned `Core` or a shared
+    /// `Rc<Core>`. The session is only borrowed temporarily.
+    pub fn attach(core: impl Into<Rc<Core>>, session: &Session) -> Result<Rtt, Error> {
+        let core = core.into();
+        let memory_map: &[MemoryRegion] = &*session.memory_map();
+
         let mut mem: Vec<u8> = Vec::new();
         let mut instances: Vec<Rtt> = Vec::new();
-        let memory_map: &[MemoryRegion] = &*session.memory_map();
 
         'out: for region in memory_map.iter() {
             if let MemoryRegion::Ram(ram) = region {
@@ -114,7 +118,7 @@ impl Rtt<'_> {
 
                 for offset in 0..(mem.len() - Self::MIN_SIZE) {
                     if let Some(rtt) = Rtt::from(
-                        core,
+                        &core,
                         memory_map,
                         range.start + offset as u32,
                         &mem[offset..],
@@ -154,26 +158,23 @@ impl Rtt<'_> {
 
     /// Reads bytes from an up (target to host) channel and returns the number of bytes read.
     pub fn read(&mut self, channel: usize, data: &mut [u8]) -> Result<usize, Error> {
-        let core = self.core;
-
         self.up_channels
             .get(&channel)
             .ok_or_else(|| Error::NoSuchChannel)
-            .and_then(|buf| buf.read(core, data))
+            .and_then(|buf| buf.read( data))
     }
 
     /// Writes bytes to a down (host to target) channel and returns the number of bytes written.
     pub fn write(&mut self, channel: usize, data: &[u8]) -> Result<usize, Error> {
-        let core = self.core;
-
         self.down_channels
             .get(&channel)
             .ok_or_else(|| Error::NoSuchChannel)
-            .and_then(|buf| buf.write(core, data))
+            .and_then(|buf| buf.write( data))
     }
 }
 
 pub struct RttChannel {
+    core: Rc<Core>,
     number: usize,
     direction: Direction,
     ptr: u32,
@@ -209,9 +210,9 @@ impl RttChannel {
     const O_FLAGS: usize = 20;
 
     fn from(
+        core: &Rc<Core>,
         number: usize,
         direction: Direction,
-        core: &Core,
         memory_map: &[MemoryRegion],
         ptr: u32,
         mem: &[u8],
@@ -227,10 +228,11 @@ impl RttChannel {
         let name = if name_ptr == 0 {
             None
         } else {
-            read_c_string(core, memory_map, name_ptr)?
+            read_c_string(&core, memory_map, name_ptr)?
         };
 
         Ok(Some(RttChannel {
+            core: Rc::clone(core),
             number,
             direction,
             ptr,
@@ -267,8 +269,8 @@ impl RttChannel {
     }
 
     // This method should only be called for up channels.
-    fn read(&self, core: &Core, mut buf: &mut [u8]) -> Result<usize, Error> {
-        let (write, mut read) = self.read_pointers(core)?;
+    fn read(&self, mut buf: &mut [u8]) -> Result<usize, Error> {
+        let (write, mut read) = self.read_pointers()?;
 
         if self.readable_contiguous(write, read) == 0 {
             // Buffer is empty - do nothing.
@@ -284,7 +286,7 @@ impl RttChannel {
                 break;
             }
 
-            core.read_8(self.buffer_ptr + read, &mut buf[..count])?;
+            self.core.read_8(self.buffer_ptr + read, &mut buf[..count])?;
 
             total += count;
             read += count as u32;
@@ -298,14 +300,14 @@ impl RttChannel {
         }
 
         // Write read pointer back to target
-        core.write_8(self.ptr + Self::O_READ as u32, &read.to_le_bytes())?;
+        self.core.write_8(self.ptr + Self::O_READ as u32, &read.to_le_bytes())?;
 
         Ok(total)
     }
 
     // This method should only be called for down channels.
-    fn write(&self, core: &Core, mut buf: &[u8]) -> Result<usize, Error> {
-        let (mut write, read) = self.read_pointers(core)?;
+    fn write(&self, mut buf: &[u8]) -> Result<usize, Error> {
+        let (mut write, read) = self.read_pointers()?;
 
         if self.writable_contiguous(write, read) == 0 {
             // Buffer is full - do nothing.
@@ -321,7 +323,7 @@ impl RttChannel {
                 break;
             }
 
-            core.write_8(self.buffer_ptr + write, &buf[..count])?;
+            self.core.write_8(self.buffer_ptr + write, &buf[..count])?;
 
             total += count;
             write += count as u32;
@@ -335,7 +337,7 @@ impl RttChannel {
         }
 
         // Write write pointer back to target
-        core.write_8(self.ptr + Self::O_WRITE as u32, &write.to_le_bytes())?;
+        self.core.write_8(self.ptr + Self::O_WRITE as u32, &write.to_le_bytes())?;
 
         Ok(total)
     }
@@ -360,9 +362,9 @@ impl RttChannel {
         }) as usize
     }
 
-    fn read_pointers(&self, core: &Core) -> Result<(u32, u32), Error> {
+    fn read_pointers(&self) -> Result<(u32, u32), Error> {
         let mut block = [0u8; 8];
-        core.read_8(self.ptr + Self::O_WRITE as u32, block.as_mut())?;
+        self.core.read_8(self.ptr + Self::O_WRITE as u32, block.as_mut())?;
 
         let write = block.as_ref().get_u32(0);
         let read = block.as_ref().get_u32(4);
