@@ -40,6 +40,9 @@ use thiserror::Error;
 mod channel;
 pub use channel::*;
 
+pub mod channels;
+pub use channels::Channels;
+
 mod rtt;
 pub use rtt::*;
 

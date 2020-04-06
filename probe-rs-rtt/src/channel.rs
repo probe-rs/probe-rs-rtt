@@ -8,6 +8,9 @@ use crate::Error;
 
 /// Trait for basic channel information.
 pub trait RttChannel {
+    /// Returns the number of the channel.
+    fn number(&self) -> usize;
+
     /// Returns the name of the channel or `None` if there is none.
     fn name(&self) -> Option<&str>;
 
@@ -124,6 +127,11 @@ impl Channel {
 pub struct UpChannel(pub(crate) Channel);
 
 impl UpChannel {
+    /// Returns the number of the channel.
+    pub fn number(&self) -> usize {
+        self.0.number
+    }
+
     /// Returns the name of the channel or `None` if there is none.
     pub fn name(&self) -> Option<&str> {
         self.0.name()
@@ -238,6 +246,11 @@ impl UpChannel {
 }
 
 impl RttChannel for UpChannel {
+    /// Returns the number of the channel.
+    fn number(&self) -> usize {
+        self.0.number
+    }
+
     fn name(&self) -> Option<&str> {
         self.0.name()
     }
@@ -256,6 +269,11 @@ impl io::Read for UpChannel {
 pub struct DownChannel(pub(crate) Channel);
 
 impl DownChannel {
+    /// Returns the number of the channel.
+    pub fn number(&self) -> usize {
+        self.0.number
+    }
+
     /// Returns the name of the channel or `None` if there is none.
     pub fn name(&self) -> Option<&str> {
         self.0.name()
@@ -324,6 +342,11 @@ impl DownChannel {
 }
 
 impl RttChannel for DownChannel {
+    /// Returns the number of the channel.
+    fn number(&self) -> usize {
+        self.0.number
+    }
+
     fn name(&self) -> Option<&str> {
         self.0.name()
     }

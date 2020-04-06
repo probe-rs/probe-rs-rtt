@@ -253,10 +253,10 @@ fn list_channels(channels: &Channels<impl RttChannel>) {
         return;
     }
 
-    for (i, chan) in channels.iter() {
+    for chan in channels.iter() {
         println!(
             "  {}: {} (buffer size {})",
-            i,
+            chan.number(),
             chan.name().as_ref().map(|s| &**s).unwrap_or("(no name)"),
             chan.buffer_size(),
         );

@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use crate::channel::*;
-use crate::Error;
+use crate::{Channels, Error};
 
 /// The RTT interface.
 ///
@@ -156,48 +156,5 @@ impl Rtt {
     /// Gets the detected down channels.
     pub fn down_channels(&mut self) -> &mut Channels<DownChannel> {
         &mut self.down_channels
-    }
-}
-
-/// List of RTT channels.
-pub struct Channels<T: RttChannel>(BTreeMap<usize, T>);
-
-impl<T: RttChannel> Channels<T> {
-    /// Returns the number of channels on the list.
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    /// Returns `true` if the list is empty.
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    /// Returns a reference to the channel corresponding to the number.
-    pub fn get(&mut self, number: usize) -> Option<&T> {
-        self.0.get(&number)
-    }
-
-    /// Removes the channel corresponding to the number from the list and returns it.
-    pub fn take(&mut self, number: usize) -> Option<T> {
-        self.0.remove(&number)
-    }
-
-    /// Gets and iterator over the channels on the list, sorted by number.
-    pub fn iter(&self) -> ChannelsIter<'_, T> {
-        ChannelsIter(self.0.iter())
-    }
-}
-
-/// An iterator over RTT channels.
-///
-/// This struct is created by the [`Channels::iter`] method. See its documentation for more.
-pub struct ChannelsIter<'a, T: RttChannel>(std::collections::btree_map::Iter<'a, usize, T>);
-
-impl<'a, T: RttChannel> Iterator for ChannelsIter<'a, T> {
-    type Item = (usize, &'a T);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.0.next().map(|(k, v)| (*k, v))
     }
 }
