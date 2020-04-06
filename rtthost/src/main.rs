@@ -1,9 +1,9 @@
 use probe_rs::{config::TargetSelector, DebugProbeInfo, Probe};
+use probe_rs_rtt::{Channels, Rtt, RttChannel};
 use std::io::prelude::*;
 use std::io::{stdin, stdout};
 use std::sync::mpsc::{channel, Receiver};
 use std::thread;
-use probe_rs_rtt::{Rtt, Channels, RttChannel};
 use structopt::StructOpt;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -180,7 +180,7 @@ fn run() -> i32 {
 
     let stdin = down_channel.as_ref().map(|_| stdin_channel());
 
-    eprintln!("Attached.");
+    eprintln!("Found control block at 0x{:08x}", rtt.ptr());
 
     let mut up_buf = [0u8; 1024];
     let mut down_buf = vec![];

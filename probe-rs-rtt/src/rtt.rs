@@ -1,11 +1,14 @@
-use std::collections::BTreeMap;
-use std::rc::Rc;
 use probe_rs::{config::MemoryRegion, Core, Session};
 use scroll::{Pread, LE};
+use std::collections::BTreeMap;
+use std::rc::Rc;
 
-use crate::Error;
 use crate::channel::*;
+use crate::Error;
 
+/// The RTT interface.
+///
+/// Use [`Rtt::attach`] to attach to a probe-rs `Core` and detect channels.
 pub struct Rtt {
     ptr: u32,
     up_channels: Channels<UpChannel>,
@@ -16,7 +19,7 @@ pub struct Rtt {
 // official RTT implementation.
 //
 // struct ControlBlock {
-//     char id[16]; // Used to find/validate the control block. Must equal "SEGGER RTT\0\0\0\0\0\0".
+//     char id[16]; // Used to find/validate the control block.
 //     // Maximum number of up (target to host) channels in following array
 //     unsigned int max_up_channels;
 //     // Maximum number of down (host to target) channels in following array.
@@ -49,7 +52,9 @@ impl Rtt {
         }
 
         let max_up_channels = mem.pread_with::<u32>(Self::O_MAX_UP_CHANNELS, LE).unwrap() as usize;
-        let max_down_channels = mem.pread_with::<u32>(Self::O_MAX_DOWN_CHANNELS, LE).unwrap() as usize;
+        let max_down_channels = mem
+            .pread_with::<u32>(Self::O_MAX_DOWN_CHANNELS, LE)
+            .unwrap() as usize;
 
         // Validate that the entire control block fits within the region
         if Self::O_CHANNEL_ARRAYS + (max_up_channels + max_down_channels) * Channel::SIZE
@@ -64,29 +69,20 @@ impl Rtt {
         for i in 0..max_up_channels {
             let offset = Self::O_CHANNEL_ARRAYS + i * Channel::SIZE;
 
-            if let Some(chan) = Channel::from(
-                &core,
-                i,
-                memory_map,
-                ptr + offset as u32,
-                &mem[offset..],
-            )? {
+            if let Some(chan) =
+                Channel::from(&core, i, memory_map, ptr + offset as u32, &mem[offset..])?
+            {
                 up_channels.insert(i, UpChannel(chan));
             }
         }
 
         for i in 0..max_down_channels {
-            let offset = Self::O_CHANNEL_ARRAYS
-                + (max_up_channels * Channel::SIZE)
-                + i * Channel::SIZE;
+            let offset =
+                Self::O_CHANNEL_ARRAYS + (max_up_channels * Channel::SIZE) + i * Channel::SIZE;
 
-            if let Some(chan) = Channel::from(
-                &core,
-                i,
-                memory_map,
-                ptr + offset as u32,
-                &mem[offset..],
-            )? {
+            if let Some(chan) =
+                Channel::from(&core, i, memory_map, ptr + offset as u32, &mem[offset..])?
+            {
                 down_channels.insert(i, DownChannel(chan));
             }
         }
@@ -95,14 +91,14 @@ impl Rtt {
             ptr,
             up_channels: Channels(up_channels),
             down_channels: Channels(down_channels),
-            }))
+        }))
     }
 
-    /// Attempts to discover an RTT control block in the core memory and returns an instance if a
+    /// Attempts to detect an RTT control block in the core memory and returns an instance if a
     /// valid control block was found.
     ///
     /// `core` can be e.g. an owned `Core` or a shared `Rc<Core>`. The session is only borrowed
-    /// temporarily during discovery.
+    /// temporarily during detection.
     pub fn attach(core: impl Into<Rc<Core>>, session: &Session) -> Result<Rtt, Error> {
         let core = core.into();
         let memory_map: &[MemoryRegion] = &*session.memory_map();
@@ -147,6 +143,11 @@ impl Rtt {
         Ok(instances.remove(0))
     }
 
+    /// Returns the memory address of the control block in target memory.
+    pub fn ptr(&self) -> u32 {
+        self.ptr
+    }
+
     /// Gets the detected up channels.
     pub fn up_channels(&mut self) -> &mut Channels<UpChannel> {
         &mut self.up_channels
@@ -188,6 +189,9 @@ impl<T: RttChannel> Channels<T> {
     }
 }
 
+/// An iterator over RTT channels.
+///
+/// This struct is created by the [`Channels::iter`] method. See its documentation for more.
 pub struct ChannelsIter<'a, T: RttChannel>(std::collections::btree_map::Iter<'a, usize, T>);
 
 impl<'a, T: RttChannel> Iterator for ChannelsIter<'a, T> {

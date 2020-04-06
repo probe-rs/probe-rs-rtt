@@ -1,13 +1,18 @@
+use probe_rs::{config::MemoryRegion, Core};
+use scroll::{Pread, LE};
 use std::cmp::min;
 use std::io;
 use std::rc::Rc;
-use probe_rs::{config::MemoryRegion, Core};
-use scroll::{Pread, LE};
 
 use crate::Error;
 
+/// Trait for basic channel information.
 pub trait RttChannel {
+    /// Returns the name of the channel or `None` if there is none.
     fn name(&self) -> Option<&str>;
+
+    /// Returns the buffer size in bytes. Note that the usable size is one byte less due to how the
+    /// ring buffer is implemented.
     fn buffer_size(&self) -> usize;
 }
 
@@ -86,7 +91,8 @@ impl Channel {
 
     fn read_pointers(&self, dir: &'static str) -> Result<(u32, u32), Error> {
         let mut block = [0u8; 8];
-        self.core.read_8(self.ptr + Self::O_WRITE as u32, block.as_mut())?;
+        self.core
+            .read_8(self.ptr + Self::O_WRITE as u32, block.as_mut())?;
 
         let write: u32 = block.pread_with(0, LE).unwrap();
         let read: u32 = block.pread_with(4, LE).unwrap();
@@ -114,19 +120,29 @@ impl Channel {
     }
 }
 
+/// RTT up (target to host) channel.
 pub struct UpChannel(pub(crate) Channel);
 
 impl UpChannel {
+    /// Returns the name of the channel or `None` if there is none.
     pub fn name(&self) -> Option<&str> {
         self.0.name()
     }
 
+    /// Returns the buffer size in bytes. Note that the usable size is one byte less due to how the
+    /// ring buffer is implemented.
     pub fn buffer_size(&self) -> usize {
         self.0.buffer_size()
     }
 
+    /// Reads the current channel mode from the target and returns its.
+    ///
+    /// See [`ChannelMode`] for more information on what the modes mean.
     pub fn mode(&self) -> Result<ChannelMode, Error> {
-        let flags = self.0.core.read_word_32(self.0.ptr + Channel::O_FLAGS as u32)?;
+        let flags = self
+            .0
+            .core
+            .read_word_32(self.0.ptr + Channel::O_FLAGS as u32)?;
 
         match flags & 0x3 {
             0 => Ok(ChannelMode::NoBlockSkip),
@@ -136,12 +152,20 @@ impl UpChannel {
         }
     }
 
+    /// Changes the channel mode on the target to the specified mode.
+    ///
+    /// See [`ChannelMode`] for more information on what the modes mean.
     pub fn set_mode(&self, mode: ChannelMode) -> Result<(), Error> {
-        let flags = self.0.core.read_word_32(self.0.ptr + Channel::O_FLAGS as u32)?;
+        let flags = self
+            .0
+            .core
+            .read_word_32(self.0.ptr + Channel::O_FLAGS as u32)?;
 
         let new_flags = (flags & !3) | (mode as u32);
 
-        self.0.core.write_word_32(self.0.ptr + Channel::O_FLAGS as u32, new_flags)?;
+        self.0
+            .core
+            .write_word_32(self.0.ptr + Channel::O_FLAGS as u32, new_flags)?;
 
         Ok(())
     }
@@ -158,7 +182,9 @@ impl UpChannel {
                 break;
             }
 
-            self.0.core.read_8(self.0.buffer_ptr + read, &mut buf[..count])?;
+            self.0
+                .core
+                .read_8(self.0.buffer_ptr + read, &mut buf[..count])?;
 
             total += count;
             read += count as u32;
@@ -174,17 +200,29 @@ impl UpChannel {
         Ok((read, total))
     }
 
+    /// Reads some bytes from the channel to the specified buffer and returns how many bytes were
+    /// read.
+    ///
+    /// This method will not block waiting for data in the target buffer, and may read less bytes
+    /// than would fit in `buf`.
     pub fn read(&self, buf: &mut [u8]) -> Result<usize, Error> {
         let (read, total) = self.read_core(buf)?;
 
         if total > 0 {
             // Write read pointer back to target if something was read
-            self.0.core.write_8(self.0.ptr + Channel::O_READ as u32, &read.to_le_bytes())?;
+            self.0
+                .core
+                .write_8(self.0.ptr + Channel::O_READ as u32, &read.to_le_bytes())?;
         }
 
         Ok(total)
     }
 
+    /// Peeks at the current data in the channel buffer, copies data into the specified buffer and
+    /// returns how many bytes were read.
+    ///
+    /// The difference from [`read`](UpChannel::read) is that this does not discard the data in the
+    /// buffer.
     pub fn peek(&self, buf: &mut [u8]) -> Result<usize, Error> {
         Ok(self.read_core(buf)?.1)
     }
@@ -200,8 +238,12 @@ impl UpChannel {
 }
 
 impl RttChannel for UpChannel {
-    fn name(&self) -> Option<&str> { self.0.name() }
-    fn buffer_size(&self) -> usize { self.0.buffer_size() }
+    fn name(&self) -> Option<&str> {
+        self.0.name()
+    }
+    fn buffer_size(&self) -> usize {
+        self.0.buffer_size()
+    }
 }
 
 impl io::Read for UpChannel {
@@ -210,17 +252,25 @@ impl io::Read for UpChannel {
     }
 }
 
+/// RTT down (host to target) channel.
 pub struct DownChannel(pub(crate) Channel);
 
 impl DownChannel {
+    /// Returns the name of the channel or `None` if there is none.
     pub fn name(&self) -> Option<&str> {
         self.0.name()
     }
 
+    /// Returns the buffer size in bytes. Note that the usable size is one byte less due to how the
+    /// ring buffer is implemented.
     pub fn buffer_size(&self) -> usize {
         self.0.buffer_size()
     }
 
+    /// Writes some bytes into the channel buffer and returns the number of bytes written.
+    ///
+    /// This method will not block waiting for space to become available in the channel buffer, and
+    /// may not write all of `buf`.
     pub fn write(&self, mut buf: &[u8]) -> Result<usize, Error> {
         let (mut write, read) = self.0.read_pointers("down")?;
 
@@ -238,7 +288,9 @@ impl DownChannel {
                 break;
             }
 
-            self.0.core.write_8(self.0.buffer_ptr + write, &buf[..count])?;
+            self.0
+                .core
+                .write_8(self.0.buffer_ptr + write, &buf[..count])?;
 
             total += count;
             write += count as u32;
@@ -252,7 +304,9 @@ impl DownChannel {
         }
 
         // Write write pointer back to target
-        self.0.core.write_8(self.0.ptr + Channel::O_WRITE as u32, &write.to_le_bytes())?;
+        self.0
+            .core
+            .write_8(self.0.ptr + Channel::O_WRITE as u32, &write.to_le_bytes())?;
 
         Ok(total)
     }
@@ -270,8 +324,12 @@ impl DownChannel {
 }
 
 impl RttChannel for DownChannel {
-    fn name(&self) -> Option<&str> { self.0.name() }
-    fn buffer_size(&self) -> usize { self.0.buffer_size() }
+    fn name(&self) -> Option<&str> {
+        self.0.name()
+    }
+    fn buffer_size(&self) -> usize {
+        self.0.buffer_size()
+    }
 }
 
 impl io::Write for DownChannel {

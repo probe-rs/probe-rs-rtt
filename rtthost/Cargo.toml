@@ -1,8 +1,9 @@
 [package]
 name = "rtthost"
 version = "0.1.0"
-authors = ["Matti Virkkunen <mvirkkunen@gmail.com>"]
 edition = "2018"
+license = "MIT"
+authors = ["Matti Virkkunen <mvirkkunen@gmail.com>"]
 
 [dependencies]
 pretty_env_logger = "0.4.0"
