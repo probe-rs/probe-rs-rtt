@@ -1,8 +1,8 @@
 //! List of RTT channels.
 
-use std::collections::{BTreeMap, btree_map};
-use std::mem;
 use crate::RttChannel;
+use std::collections::{btree_map, BTreeMap};
+use std::mem;
 
 /// List of RTT channels.
 pub struct Channels<T: RttChannel>(pub(crate) BTreeMap<usize, T>);

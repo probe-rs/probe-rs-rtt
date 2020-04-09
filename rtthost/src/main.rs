@@ -1,5 +1,5 @@
 use probe_rs::{config::TargetSelector, DebugProbeInfo, Probe};
-use probe_rs_rtt::{Channels, Rtt, RttChannel};
+use probe_rs_rtt::{Channels, Rtt, RttChannel, ScanRegion};
 use std::io::prelude::*;
 use std::io::{stdin, stdout};
 use std::sync::mpsc::{channel, Receiver};
@@ -23,6 +23,30 @@ impl std::str::FromStr for ProbeInfo {
         } else {
             Err("Invalid probe number.")
         }
+    }
+}
+
+fn parse_scan_region(mut src: &str) -> Result<ScanRegion, Box<dyn std::error::Error>> {
+    src = src.trim();
+    if src.is_empty() {
+        return Ok(ScanRegion::Ram);
+    }
+
+    let parts = src
+        .split("..")
+        .map(|p| {
+            if p.starts_with("0x") || p.starts_with("0X") {
+                u32::from_str_radix(&p[2..], 16)
+            } else {
+                p.parse()
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    match parts.as_slice() {
+        &[addr] => Ok(ScanRegion::Exact(addr)),
+        &[start, end] => Ok(ScanRegion::Range(start..end)),
+        _ => Err("Invalid range: multiple '..'s".into()),
     }
 }
 
@@ -63,6 +87,13 @@ struct Opts {
         help = "Number of down channel for keyboard input. Defaults to 0 if it exists."
     )]
     down: Option<usize>,
+
+    #[structopt(
+        long,
+        default_value="",
+        parse(try_from_str=parse_scan_region),
+        help = "Memory region to scan for control block. You can specify either an exact starting address '0x1000' or a range such as '0x0000..0x1000'. Both decimal and hex are accepted.")]
+    scan_region: ScanRegion,
 }
 
 fn main() {
@@ -134,7 +165,7 @@ fn run() -> i32 {
 
     eprintln!("Attaching to RTT...");
 
-    let mut rtt = match Rtt::attach(core, &session) {
+    let mut rtt = match Rtt::attach_region(core, &session, &opts.scan_region) {
         Ok(rtt) => rtt,
         Err(err) => {
             eprintln!("Error attaching to RTT: {}", err);

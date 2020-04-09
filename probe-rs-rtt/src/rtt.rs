@@ -1,6 +1,8 @@
 use probe_rs::{config::MemoryRegion, Core, Session};
 use scroll::{Pread, LE};
+use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::ops::Range;
 use std::rc::Rc;
 
 use crate::channel::*;
@@ -43,9 +45,21 @@ impl Rtt {
     fn from(
         core: &Rc<Core>,
         memory_map: &[MemoryRegion],
+        // Pointer from which to scan
         ptr: u32,
-        mem: &[u8],
+        // Memory contents read in advance, starting from ptr
+        mem_in: Option<&[u8]>,
     ) -> Result<Option<Rtt>, Error> {
+        let mut mem = match mem_in {
+            Some(mem) => Cow::Borrowed(mem),
+            None => {
+                // If memory wasn't passed in, read the minimum header size
+                let mut mem = vec![0u8; Self::MIN_SIZE];
+                core.read_8(ptr, &mut mem)?;
+                Cow::Owned(mem)
+            }
+        };
+
         // Validate that the control block starts with the ID bytes
         if mem[Self::O_ID..(Self::O_ID + Self::RTT_ID.len())] != Self::RTT_ID {
             return Ok(None);
@@ -56,10 +70,27 @@ impl Rtt {
             .pread_with::<u32>(Self::O_MAX_DOWN_CHANNELS, LE)
             .unwrap() as usize;
 
+        // *Very* conservative sanity check, most people
+        if max_up_channels > 255 || max_down_channels > 255 {
+            return Err(Error::ControlBlockCorrupted(format!(
+                "Nonsensical array sizes at {:08x}: max_up_channels={} max_down_channels={}",
+                ptr, max_up_channels, max_down_channels
+            )));
+        }
+
+        let cb_len = Self::O_CHANNEL_ARRAYS + (max_up_channels + max_down_channels) * Channel::SIZE;
+
+        if let Cow::Owned(mem) = &mut mem {
+            // If memory wasn't passed in, read the rest of the control block
+            mem.resize(cb_len, 0);
+            core.read_8(
+                ptr + Self::MIN_SIZE as u32,
+                &mut mem[Self::MIN_SIZE..cb_len],
+            )?;
+        }
+
         // Validate that the entire control block fits within the region
-        if Self::O_CHANNEL_ARRAYS + (max_up_channels + max_down_channels) * Channel::SIZE
-            >= mem.len()
-        {
+        if mem.len() < cb_len {
             return Ok(None);
         }
 
@@ -94,37 +125,60 @@ impl Rtt {
         }))
     }
 
+    pub fn attach(core: impl Into<Rc<Core>>, session: &Session) -> Result<Rtt, Error> {
+        Self::attach_region(core, session, &Default::default())
+    }
+
     /// Attempts to detect an RTT control block in the core memory and returns an instance if a
     /// valid control block was found.
     ///
     /// `core` can be e.g. an owned `Core` or a shared `Rc<Core>`. The session is only borrowed
     /// temporarily during detection.
-    pub fn attach(core: impl Into<Rc<Core>>, session: &Session) -> Result<Rtt, Error> {
+    pub fn attach_region(
+        core: impl Into<Rc<Core>>,
+        session: &Session,
+        region: &ScanRegion,
+    ) -> Result<Rtt, Error> {
         let core = core.into();
         let memory_map: &[MemoryRegion] = &*session.memory_map();
+
+        let ranges: Vec<Range<u32>> = match region {
+            ScanRegion::Exact(addr) => {
+                return Rtt::from(&core, memory_map, *addr, None)?
+                    .ok_or(Error::ControlBlockNotFound);
+            }
+            ScanRegion::Ram => memory_map
+                .iter()
+                .filter_map(|r| match r {
+                    MemoryRegion::Ram(r) => Some(r.range.clone()),
+                    _ => None,
+                })
+                .collect(),
+            ScanRegion::Range(region) => vec![region.clone()],
+        };
 
         let mut mem: Vec<u8> = Vec::new();
         let mut instances: Vec<Rtt> = Vec::new();
 
-        'out: for region in memory_map.iter() {
-            if let MemoryRegion::Ram(ram) = region {
-                let range = &ram.range;
+        for range in ranges.iter() {
+            if range.len() < Self::MIN_SIZE {
+                continue;
+            }
 
-                mem.resize((range.end - range.start) as usize, 0);
-                core.read_8(range.start, mem.as_mut())?;
+            mem.resize(range.len(), 0);
+            core.read_8(range.start, mem.as_mut())?;
 
-                for offset in 0..(mem.len() - Self::MIN_SIZE) {
-                    if let Some(rtt) = Rtt::from(
-                        &core,
-                        memory_map,
-                        range.start + offset as u32,
-                        &mem[offset..],
-                    )? {
-                        instances.push(rtt);
+            for offset in 0..(mem.len() - Self::MIN_SIZE) {
+                if let Some(rtt) = Rtt::from(
+                    &core,
+                    memory_map,
+                    range.start + offset as u32,
+                    Some(&mem[offset..]),
+                )? {
+                    instances.push(rtt);
 
-                        if instances.len() > 5 {
-                            break 'out;
-                        }
+                    if instances.len() > 5 {
+                        break;
                     }
                 }
             }
@@ -156,5 +210,27 @@ impl Rtt {
     /// Gets the detected down channels.
     pub fn down_channels(&mut self) -> &mut Channels<DownChannel> {
         &mut self.down_channels
+    }
+}
+
+/// Region
+#[derive(Clone, Debug)]
+pub enum ScanRegion {
+    /// Scans all RAM regions known to probe-rs. This is the default.
+    Ram,
+
+    /// Limit scanning to these memory addresses in target memory. It is up to the user to ensure
+    /// that reading from this range will not read from undefined memory.
+    Range(Range<u32>),
+
+    /// Tries to find the control block starting at this exact address. It is up to the user to
+    /// ensure that reading the necessary bytes after the pointer will no read from undefined
+    /// memory.
+    Exact(u32),
+}
+
+impl Default for ScanRegion {
+    fn default() -> Self {
+        ScanRegion::Ram
     }
 }
