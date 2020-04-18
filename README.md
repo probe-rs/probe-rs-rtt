@@ -1,15 +1,11 @@
 # probe-rs-rtt
 
-Host side implementation of the RTT (Real-Time Transfer) I/O protocol over probe-rs
+[![crates.io](https://meritbadge.herokuapp.com/probe-rs-rtt)](https://crates.io/crates/probe-rs-rtt) [![documentation](https://docs.rs/probe-rs-rtt/badge.svg)](https://docs.rs/probe-rs-rtt)
 
-## TODO
+Host side implementation of the RTT (Real-Time Transfer) I/O protocol over probe-rs.
 
-- Virtual terminal support for channel 0
-- Support for filters to limit where to scan for the "control block"
-  - Specific memory address (range)
-  - Nth block only (if it's duplicated somehow)
-  - Symbol address from ELF file?
-- Support for using multiple channels at once in the CLI
-  - Redirect to file?
-  - Redirect to socket?
-  - An interactive multi-terminal would be nice but would involve implementing half of "tmux"
+## [Documentation](https://docs.rs/probe-rs-rtt)
+
+RTT implements input and output to/from a microcontroller using in-memory ring buffers and memory polling. This enables debug logging from the microcontroller with minimal delays and no blocking, making it usable even in real-time applications where e.g. semihosting delays cannot be tolerated.
+
+This crate enables you to read and write via RTT channels. It's also used as a building-block for probe-rs debugging tools.

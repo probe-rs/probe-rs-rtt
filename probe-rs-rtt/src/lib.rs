@@ -1,9 +1,12 @@
 //! Host side implementation of the RTT (Real-Time Transfer) I/O protocol over probe-rs
 //!
-//! RTT implements input and output to/from a debug probe using in-memory ring buffers and memory
-//! polling. This enables debug logging from the microcontroller with minimal delays and no
+//! RTT implements input and output to/from a microcontroller using in-memory ring buffers and
+//! memory polling. This enables debug logging from the microcontroller with minimal delays and no
 //! blocking, making it usable even in real-time applications where e.g. semihosting delays cannot
 //! be tolerated.
+//!
+//! This crate enables you to read and write via RTT channels. It's also used as a building-block
+//! for probe-rs debugging tools.
 //!
 //! ## Example
 //!
@@ -55,17 +58,13 @@ pub enum Error {
     )]
     ControlBlockNotFound,
 
-    /// Multiple control blocks found in target memory. The data contains the control block addresses.
+    /// Multiple control blocks found in target memory. The data contains the control block addresses (up to 5).
     #[error("Multiple control blocks found in target memory.")]
     MultipleControlBlocksFound(Vec<u32>),
 
     /// The control block has been corrupted. The data contains a detailed error.
     #[error("Control block corrupted: {0}")]
     ControlBlockCorrupted(String),
-
-    /// The target flags contain an invalid channel mode.
-    #[error("The target flags contain an invalid channel mode.")]
-    InvalidChannelMode,
 
     /// Wraps errors propagated up from probe-rs.
     #[error("Error communicating with probe: {0}")]

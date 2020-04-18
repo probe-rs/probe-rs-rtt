@@ -6,7 +6,7 @@ use std::rc::Rc;
 
 use crate::Error;
 
-/// Trait for basic channel information.
+/// Trait for channel information shared between up and down channels.
 pub trait RttChannel {
     /// Returns the number of the channel.
     fn number(&self) -> usize;
@@ -156,7 +156,9 @@ impl UpChannel {
             0 => Ok(ChannelMode::NoBlockSkip),
             1 => Ok(ChannelMode::NoBlockTrim),
             2 => Ok(ChannelMode::BlockIfFull),
-            _ => Err(Error::InvalidChannelMode),
+            _ => Err(Error::ControlBlockCorrupted(String::from(
+                "The channel mode flags are invalid",
+            ))),
         }
     }
 

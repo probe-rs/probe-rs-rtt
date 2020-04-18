@@ -125,12 +125,17 @@ impl Rtt {
         }))
     }
 
+    /// Attempts to detect an RTT control block anywhere in the target RAM and returns an instance
+    /// if a valid control block was found.
+    ///
+    /// `core` can be e.g. an owned `Core` or a shared `Rc<Core>`. The session is only borrowed
+    /// temporarily during detection.
     pub fn attach(core: impl Into<Rc<Core>>, session: &Session) -> Result<Rtt, Error> {
         Self::attach_region(core, session, &Default::default())
     }
 
-    /// Attempts to detect an RTT control block in the core memory and returns an instance if a
-    /// valid control block was found.
+    /// Attempts to detect an RTT control block in the specified RAM region(s) and returns an
+    /// instance if a valid control block was found.
     ///
     /// `core` can be e.g. an owned `Core` or a shared `Rc<Core>`. The session is only borrowed
     /// temporarily during detection.
@@ -177,7 +182,7 @@ impl Rtt {
                 )? {
                     instances.push(rtt);
 
-                    if instances.len() > 5 {
+                    if instances.len() >= 5 {
                         break;
                     }
                 }
@@ -213,10 +218,11 @@ impl Rtt {
     }
 }
 
-/// Region
+/// Used to specify which memory regions to scan for the RTT control block.
 #[derive(Clone, Debug)]
 pub enum ScanRegion {
-    /// Scans all RAM regions known to probe-rs. This is the default.
+    /// Scans all RAM regions known to probe-rs. This is the default and should always work, however
+    /// if your device has a lot of RAM, scanning all of it is slow.
     Ram,
 
     /// Limit scanning to these memory addresses in target memory. It is up to the user to ensure
