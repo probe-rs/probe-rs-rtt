@@ -4,10 +4,10 @@ description = "Host side implementation of the RTT (Real-Time Transfer) I/O prot
 version = "0.1.0"
 edition = "2018"
 readme = "README.md"
-keywords = ["no-std", "embedded", "debugging", "rtt"]
+keywords = ["embedded", "debugging", "rtt"]
 license = "MIT"
 authors = ["Matti Virkkunen <mvirkkunen@gmail.com>"]
-repository = "https://github.com/mvirkkunen/probe-rs-rtt"
+repository = "https://github.com/probe-rs/probe-rs-rtt"
 
 [dependencies]
 probe-rs = "0.6.0"
