@@ -10,6 +10,6 @@ authors = ["Matti Virkkunen <mvirkkunen@gmail.com>"]
 repository = "https://github.com/probe-rs/probe-rs-rtt"
 
 [dependencies]
-probe-rs = "0.6.0"
+probe-rs = { version = "0.6.2", git = "https://github.com/probe-rs/probe-rs", branch = "serial-id" }
 scroll = "0.10.1"
 thiserror = "1.0.11"

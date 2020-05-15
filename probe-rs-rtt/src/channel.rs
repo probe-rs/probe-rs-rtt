@@ -1,8 +1,8 @@
-use probe_rs::{config::MemoryRegion, Core};
+use probe_rs::{config::MemoryRegion, MemoryInterface, Session};
 use scroll::{Pread, LE};
 use std::cmp::min;
 use std::io;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 use crate::Error;
 
@@ -20,7 +20,7 @@ pub trait RttChannel {
 }
 
 pub(crate) struct Channel {
-    core: Rc<Core>,
+    session: Arc<Mutex<Session>>,
     number: usize,
     ptr: u32,
     name: Option<String>,
@@ -54,7 +54,7 @@ impl Channel {
     const O_FLAGS: usize = 20;
 
     pub(crate) fn from(
-        core: &Rc<Core>,
+        session: &Arc<Mutex<Session>>,
         number: usize,
         memory_map: &[MemoryRegion],
         ptr: u32,
@@ -71,11 +71,11 @@ impl Channel {
         let name = if name_ptr == 0 {
             None
         } else {
-            read_c_string(&core, memory_map, name_ptr)?
+            read_c_string(&mut session.lock().unwrap(), memory_map, name_ptr)?
         };
 
         Ok(Some(Channel {
-            core: Rc::clone(core),
+            session: Arc::clone(session),
             number,
             ptr,
             name,
@@ -94,7 +94,10 @@ impl Channel {
 
     fn read_pointers(&self, dir: &'static str) -> Result<(u32, u32), Error> {
         let mut block = [0u8; 8];
-        self.core
+        self.session
+            .lock()
+            .unwrap()
+            .core(0)?
             .read_8(self.ptr + Self::O_WRITE as u32, block.as_mut())?;
 
         let write: u32 = block.pread_with(0, LE).unwrap();
@@ -147,10 +150,9 @@ impl UpChannel {
     ///
     /// See [`ChannelMode`] for more information on what the modes mean.
     pub fn mode(&self) -> Result<ChannelMode, Error> {
-        let flags = self
-            .0
-            .core
-            .read_word_32(self.0.ptr + Channel::O_FLAGS as u32)?;
+        let mut lock = self.0.session.lock().unwrap();
+        let mut core = lock.core(0)?;
+        let flags = core.read_word_32(self.0.ptr + Channel::O_FLAGS as u32)?;
 
         match flags & 0x3 {
             0 => Ok(ChannelMode::NoBlockSkip),
@@ -166,16 +168,13 @@ impl UpChannel {
     ///
     /// See [`ChannelMode`] for more information on what the modes mean.
     pub fn set_mode(&self, mode: ChannelMode) -> Result<(), Error> {
-        let flags = self
-            .0
-            .core
-            .read_word_32(self.0.ptr + Channel::O_FLAGS as u32)?;
+        let mut lock = self.0.session.lock().unwrap();
+        let mut core = lock.core(0)?;
+
+        let flags = core.read_word_32(self.0.ptr + Channel::O_FLAGS as u32)?;
 
         let new_flags = (flags & !3) | (mode as u32);
-
-        self.0
-            .core
-            .write_word_32(self.0.ptr + Channel::O_FLAGS as u32, new_flags)?;
+        core.write_word_32(self.0.ptr + Channel::O_FLAGS as u32, new_flags)?;
 
         Ok(())
     }
@@ -192,9 +191,9 @@ impl UpChannel {
                 break;
             }
 
-            self.0
-                .core
-                .read_8(self.0.buffer_ptr + read, &mut buf[..count])?;
+            let mut lock = self.0.session.lock().unwrap();
+            let mut core = lock.core(0)?;
+            core.read_8(self.0.buffer_ptr + read, &mut buf[..count])?;
 
             total += count;
             read += count as u32;
@@ -220,9 +219,9 @@ impl UpChannel {
 
         if total > 0 {
             // Write read pointer back to target if something was read
-            self.0
-                .core
-                .write_8(self.0.ptr + Channel::O_READ as u32, &read.to_le_bytes())?;
+            let mut lock = self.0.session.lock().unwrap();
+            let mut core = lock.core(0)?;
+            core.write_8(self.0.ptr + Channel::O_READ as u32, &read.to_le_bytes())?;
         }
 
         Ok(total)
@@ -308,9 +307,9 @@ impl DownChannel {
                 break;
             }
 
-            self.0
-                .core
-                .write_8(self.0.buffer_ptr + write, &buf[..count])?;
+            let mut lock = self.0.session.lock().unwrap();
+            let mut core = lock.core(0)?;
+            core.write_8(self.0.buffer_ptr + write, &buf[..count])?;
 
             total += count;
             write += count as u32;
@@ -324,9 +323,10 @@ impl DownChannel {
         }
 
         // Write write pointer back to target
-        self.0
-            .core
-            .write_8(self.0.ptr + Channel::O_WRITE as u32, &write.to_le_bytes())?;
+
+        let mut lock = self.0.session.lock().unwrap();
+        let mut core = lock.core(0)?;
+        core.write_8(self.0.ptr + Channel::O_WRITE as u32, &write.to_le_bytes())?;
 
         Ok(total)
     }
@@ -369,7 +369,7 @@ impl io::Write for DownChannel {
 
 /// Reads a null-terminated string from target memory. Lossy UTF-8 decoding is used.
 fn read_c_string(
-    core: &Core,
+    session: &mut Session,
     memory_map: &[MemoryRegion],
     ptr: u32,
 ) -> Result<Option<String>, Error> {
@@ -391,7 +391,7 @@ fn read_c_string(
 
     // Read up to 128 bytes not going past the end of the region
     let mut bytes = vec![0u8; min(128, (range.end - ptr) as usize)];
-    core.read_8(ptr, bytes.as_mut())?;
+    session.core(0)?.read_8(ptr, bytes.as_mut())?;
 
     // If the bytes read contain a null, return the preceding part as a string, otherwise None.
     Ok(bytes

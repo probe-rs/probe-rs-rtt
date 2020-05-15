@@ -155,17 +155,9 @@ fn run() -> i32 {
         }
     };
 
-    let core = match session.attach_to_core(0) {
-        Ok(core) => core,
-        Err(err) => {
-            eprintln!("Error attaching to core 0: {}", err);
-            return 1;
-        }
-    };
-
     eprintln!("Attaching to RTT...");
 
-    let mut rtt = match Rtt::attach_region(core, &session, &opts.scan_region) {
+    let mut rtt = match Rtt::attach_region(session, &opts.scan_region) {
         Ok(rtt) => rtt,
         Err(err) => {
             eprintln!("Error attaching to RTT: {}", err);
