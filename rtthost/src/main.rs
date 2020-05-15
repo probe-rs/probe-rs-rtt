@@ -2,7 +2,10 @@ use probe_rs::{config::TargetSelector, DebugProbeInfo, Probe};
 use probe_rs_rtt::{Channels, Rtt, RttChannel, ScanRegion};
 use std::io::prelude::*;
 use std::io::{stdin, stdout};
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::{
+    mpsc::{channel, Receiver},
+    Arc, Mutex,
+};
 use std::thread;
 use structopt::StructOpt;
 
@@ -157,7 +160,7 @@ fn run() -> i32 {
 
     eprintln!("Attaching to RTT...");
 
-    let mut rtt = match Rtt::attach_region(session, &opts.scan_region) {
+    let mut rtt = match Rtt::attach_region(Arc::new(Mutex::new(session)), &opts.scan_region) {
         Ok(rtt) => rtt,
         Err(err) => {
             eprintln!("Error attaching to RTT: {}", err);

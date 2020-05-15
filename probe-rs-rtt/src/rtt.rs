@@ -133,7 +133,7 @@ impl Rtt {
     ///
     /// `core` can be e.g. an owned `Core` or a shared `Rc<Core>`. The session is only borrowed
     /// temporarily during detection.
-    pub fn attach(session: Session) -> Result<Rtt, Error> {
+    pub fn attach(session: Arc<Mutex<Session>>) -> Result<Rtt, Error> {
         Self::attach_region(session, &Default::default())
     }
 
@@ -142,8 +142,7 @@ impl Rtt {
     ///
     /// `core` can be e.g. an owned `Core` or a shared `Rc<Core>`. The session is only borrowed
     /// temporarily during detection.
-    pub fn attach_region(session: Session, region: &ScanRegion) -> Result<Rtt, Error> {
-        let session = Arc::new(Mutex::new(session));
+    pub fn attach_region(session: Arc<Mutex<Session>>, region: &ScanRegion) -> Result<Rtt, Error> {
         let memory_map: &[MemoryRegion] = &session.lock().unwrap().memory_map().to_vec();
 
         let ranges: Vec<Range<u32>> = match region {
