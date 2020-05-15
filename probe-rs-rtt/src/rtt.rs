@@ -1,9 +1,9 @@
-use probe_rs::{config::MemoryRegion, Core, Session};
+use probe_rs::{config::MemoryRegion, MemoryInterface, Session};
 use scroll::{Pread, LE};
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::ops::Range;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 use crate::channel::*;
 use crate::{Channels, Error};
@@ -43,18 +43,21 @@ impl Rtt {
     const O_CHANNEL_ARRAYS: usize = 24;
 
     fn from(
-        core: &Rc<Core>,
+        session: Arc<Mutex<Session>>,
         memory_map: &[MemoryRegion],
         // Pointer from which to scan
         ptr: u32,
         // Memory contents read in advance, starting from ptr
         mem_in: Option<&[u8]>,
     ) -> Result<Option<Rtt>, Error> {
+        let mut lock = session.lock().unwrap();
+        let mut core = lock.core(0)?;
         let mut mem = match mem_in {
             Some(mem) => Cow::Borrowed(mem),
             None => {
                 // If memory wasn't passed in, read the minimum header size
                 let mut mem = vec![0u8; Self::MIN_SIZE];
+
                 core.read_8(ptr, &mut mem)?;
                 Cow::Owned(mem)
             }
@@ -101,7 +104,7 @@ impl Rtt {
             let offset = Self::O_CHANNEL_ARRAYS + i * Channel::SIZE;
 
             if let Some(chan) =
-                Channel::from(&core, i, memory_map, ptr + offset as u32, &mem[offset..])?
+                Channel::from(&session, i, memory_map, ptr + offset as u32, &mem[offset..])?
             {
                 up_channels.insert(i, UpChannel(chan));
             }
@@ -112,7 +115,7 @@ impl Rtt {
                 Self::O_CHANNEL_ARRAYS + (max_up_channels * Channel::SIZE) + i * Channel::SIZE;
 
             if let Some(chan) =
-                Channel::from(&core, i, memory_map, ptr + offset as u32, &mem[offset..])?
+                Channel::from(&session, i, memory_map, ptr + offset as u32, &mem[offset..])?
             {
                 down_channels.insert(i, DownChannel(chan));
             }
@@ -130,8 +133,8 @@ impl Rtt {
     ///
     /// `core` can be e.g. an owned `Core` or a shared `Rc<Core>`. The session is only borrowed
     /// temporarily during detection.
-    pub fn attach(core: impl Into<Rc<Core>>, session: &Session) -> Result<Rtt, Error> {
-        Self::attach_region(core, session, &Default::default())
+    pub fn attach(session: Session) -> Result<Rtt, Error> {
+        Self::attach_region(session, &Default::default())
     }
 
     /// Attempts to detect an RTT control block in the specified RAM region(s) and returns an
@@ -139,17 +142,13 @@ impl Rtt {
     ///
     /// `core` can be e.g. an owned `Core` or a shared `Rc<Core>`. The session is only borrowed
     /// temporarily during detection.
-    pub fn attach_region(
-        core: impl Into<Rc<Core>>,
-        session: &Session,
-        region: &ScanRegion,
-    ) -> Result<Rtt, Error> {
-        let core = core.into();
-        let memory_map: &[MemoryRegion] = &*session.memory_map();
+    pub fn attach_region(session: Session, region: &ScanRegion) -> Result<Rtt, Error> {
+        let session = Arc::new(Mutex::new(session));
+        let memory_map: &[MemoryRegion] = &session.lock().unwrap().memory_map().to_vec();
 
         let ranges: Vec<Range<u32>> = match region {
             ScanRegion::Exact(addr) => {
-                return Rtt::from(&core, memory_map, *addr, None)?
+                return Rtt::from(session, memory_map, *addr, None)?
                     .ok_or(Error::ControlBlockNotFound);
             }
             ScanRegion::Ram => memory_map
@@ -171,11 +170,13 @@ impl Rtt {
             }
 
             mem.resize(range.len(), 0);
+            let mut lock = session.lock().unwrap();
+            let mut core = lock.core(0)?;
             core.read_8(range.start, mem.as_mut())?;
 
             for offset in 0..(mem.len() - Self::MIN_SIZE) {
                 if let Some(rtt) = Rtt::from(
-                    &core,
+                    session.clone(),
                     memory_map,
                     range.start + offset as u32,
                     Some(&mem[offset..]),
