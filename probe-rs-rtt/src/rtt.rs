@@ -50,14 +50,13 @@ impl Rtt {
         // Memory contents read in advance, starting from ptr
         mem_in: Option<&[u8]>,
     ) -> Result<Option<Rtt>, Error> {
-        let mut lock = session.lock().unwrap();
-        let mut core = lock.core(0)?;
         let mut mem = match mem_in {
             Some(mem) => Cow::Borrowed(mem),
             None => {
                 // If memory wasn't passed in, read the minimum header size
                 let mut mem = vec![0u8; Self::MIN_SIZE];
-
+                let mut lock = session.lock().unwrap();
+                let mut core = lock.core(0)?;
                 core.read_8(ptr, &mut mem)?;
                 Cow::Owned(mem)
             }
@@ -86,6 +85,8 @@ impl Rtt {
         if let Cow::Owned(mem) = &mut mem {
             // If memory wasn't passed in, read the rest of the control block
             mem.resize(cb_len, 0);
+            let mut lock = session.lock().unwrap();
+            let mut core = lock.core(0)?;
             core.read_8(
                 ptr + Self::MIN_SIZE as u32,
                 &mut mem[Self::MIN_SIZE..cb_len],
