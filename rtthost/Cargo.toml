@@ -7,6 +7,6 @@ authors = ["Matti Virkkunen <mvirkkunen@gmail.com>"]
 
 [dependencies]
 pretty_env_logger = "0.4.0"
-probe-rs = { version = "0.6.2", git = "https://github.com/probe-rs/probe-rs", branch = "serial-id" }
+probe-rs = { version = "0.7.0" }
 probe-rs-rtt = "0.1.0"
 structopt = "0.3.11"
