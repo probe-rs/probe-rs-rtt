@@ -10,6 +10,6 @@ authors = ["Matti Virkkunen <mvirkkunen@gmail.com>"]
 repository = "https://github.com/probe-rs/probe-rs-rtt"
 
 [dependencies]
-probe-rs = { version = "0.7.0" }
+probe-rs = { version = "0.7.1", git = "https://github.com/probe-rs/probe-rs", branch = "configurable-timeout" }
 scroll = "0.10.1"
 thiserror = "1.0.11"
