@@ -11,6 +11,6 @@ repository = "https://github.com/probe-rs/probe-rs-rtt"
 
 [dependencies]
 log = "0.4.8"
-probe-rs = { version = "0.7.0" }
+probe-rs = { version = "0.8.0" }
 scroll = "0.10.1"
 thiserror = "1.0.11"
