@@ -11,6 +11,7 @@ use crate::{Channels, Error};
 /// The RTT interface.
 ///
 /// Use [`Rtt::attach`] to attach to a probe-rs `Core` and detect channels.
+#[derive(Debug)]
 pub struct Rtt {
     ptr: u32,
     up_channels: Channels<UpChannel>,
