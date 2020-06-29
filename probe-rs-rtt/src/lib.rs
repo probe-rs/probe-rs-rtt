@@ -11,16 +11,16 @@
 //! ## Example
 //!
 //! ```no_run
+//! use std::sync::{Arc, Mutex};
 //! use probe_rs::Probe;
 //! use probe_rs_rtt::Rtt;
 //!
-//! // First obtain a probe-rs session and core (see probe-rs documentation for details)
+//! // First obtain a probe-rs session (see probe-rs documentation for details)
 //! let probe = Probe::list_all()[0].open()?;
-//! let session = probe.attach("somechip")?;
-//! let core = session.attach_to_core(0)?;
+//! let mut session = probe.attach("somechip")?;
 //!
 //! // Attach to RTT
-//! let mut rtt = Rtt::attach(core, &session)?;
+//! let mut rtt = Rtt::attach(Arc::new(Mutex::new(session)))?;
 //!
 //! // Read from a channel
 //! if let Some(input) = rtt.up_channels().take(0) {
@@ -35,7 +35,7 @@
 //!     output.write(b"Hello, computer!\n")?;
 //! }
 //!
-//! # Ok::<(), Box<std::error::Error>>(())
+//! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
 use thiserror::Error;
