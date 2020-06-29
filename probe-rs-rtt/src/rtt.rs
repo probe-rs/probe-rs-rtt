@@ -109,6 +109,9 @@ impl Rtt {
             {
                 up_channels.insert(i, UpChannel(chan));
             }
+            else {
+                log::warn!("Buffer for up channel {} not initialized", i);
+            }
         }
 
         for i in 0..max_down_channels {
@@ -119,6 +122,9 @@ impl Rtt {
                 Channel::from(&session, i, memory_map, ptr + offset as u32, &mem[offset..])?
             {
                 down_channels.insert(i, DownChannel(chan));
+            }
+            else {
+                log::warn!("Buffer for down channel {} not initialized", i);
             }
         }
 
