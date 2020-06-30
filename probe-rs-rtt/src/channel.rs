@@ -19,6 +19,7 @@ pub trait RttChannel {
     fn buffer_size(&self) -> usize;
 }
 
+#[derive(Debug)]
 pub(crate) struct Channel {
     session: Arc<Mutex<Session>>,
     number: usize,
@@ -127,6 +128,7 @@ impl Channel {
 }
 
 /// RTT up (target to host) channel.
+#[derive(Debug)]
 pub struct UpChannel(pub(crate) Channel);
 
 impl UpChannel {
@@ -267,6 +269,7 @@ impl io::Read for UpChannel {
 }
 
 /// RTT down (host to target) channel.
+#[derive(Debug)]
 pub struct DownChannel(pub(crate) Channel);
 
 impl DownChannel {

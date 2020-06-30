@@ -5,6 +5,7 @@ use std::collections::{btree_map, BTreeMap};
 use std::mem;
 
 /// List of RTT channels.
+#[derive(Debug)]
 pub struct Channels<T: RttChannel>(pub(crate) BTreeMap<usize, T>);
 
 impl<T: RttChannel> Channels<T> {
