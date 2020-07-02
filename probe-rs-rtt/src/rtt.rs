@@ -64,7 +64,13 @@ impl Rtt {
         };
 
         // Validate that the control block starts with the ID bytes
-        if mem[Self::O_ID..(Self::O_ID + Self::RTT_ID.len())] != Self::RTT_ID {
+        let rtt_id = &mem[Self::O_ID..(Self::O_ID + Self::RTT_ID.len())];
+        if rtt_id != Self::RTT_ID {
+            log::debug!(
+                "Expected control block to start with RTT ID. Got instead: {:?}",
+                rtt_id
+            );
+
             return Ok(None);
         }
 
@@ -96,6 +102,7 @@ impl Rtt {
 
         // Validate that the entire control block fits within the region
         if mem.len() < cb_len {
+            log::debug!("Control block doesn't fit in scanned memory region.");
             return Ok(None);
         }
 
@@ -153,17 +160,27 @@ impl Rtt {
 
         let ranges: Vec<Range<u32>> = match region {
             ScanRegion::Exact(addr) => {
+                log::debug!("Scanning at exact address: 0x{:X}", addr);
+
                 return Rtt::from(session, memory_map, *addr, None)?
                     .ok_or(Error::ControlBlockNotFound);
             }
-            ScanRegion::Ram => memory_map
-                .iter()
-                .filter_map(|r| match r {
-                    MemoryRegion::Ram(r) => Some(r.range.clone()),
-                    _ => None,
-                })
-                .collect(),
-            ScanRegion::Range(region) => vec![region.clone()],
+            ScanRegion::Ram => {
+                log::debug!("Scanning RAM");
+
+                memory_map
+                    .iter()
+                    .filter_map(|r| match r {
+                        MemoryRegion::Ram(r) => Some(r.range.clone()),
+                        _ => None,
+                    })
+                    .collect()
+            }
+            ScanRegion::Range(region) => {
+                log::debug!("Scanning region: {:?}", region);
+
+                vec![region.clone()]
+            }
         };
 
         let mut mem: Vec<u8> = Vec::new();
