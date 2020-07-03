@@ -54,7 +54,9 @@ pub use rtt::*;
 pub enum Error {
     /// RTT control block not found in target memory. Make sure RTT is initialized on the target.
     #[error(
-        "RTT control block not found in target memory. Make sure RTT is initialized on the target."
+        "RTT control block not found in target memory.\n\
+        - Make sure RTT is initialized on the target.\n\
+        - Depending on the target, sleep modes can interfere with RTT."
     )]
     ControlBlockNotFound,
 
