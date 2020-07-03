@@ -66,7 +66,7 @@ impl Rtt {
         // Validate that the control block starts with the ID bytes
         let rtt_id = &mem[Self::O_ID..(Self::O_ID + Self::RTT_ID.len())];
         if rtt_id != Self::RTT_ID {
-            log::debug!(
+            log::trace!(
                 "Expected control block to start with RTT ID. Got instead: {:?}",
                 rtt_id
             );
