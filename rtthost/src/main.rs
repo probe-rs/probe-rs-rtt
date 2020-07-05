@@ -4,10 +4,11 @@ use std::io::prelude::*;
 use std::io::{stdin, stdout};
 use std::sync::{
     mpsc::{channel, Receiver},
-    Arc, Mutex,
+    Arc
 };
 use std::thread;
 use structopt::StructOpt;
+use trace_mutex::Mutex;
 
 #[derive(Debug, PartialEq, Eq)]
 enum ProbeInfo {
