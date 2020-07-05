@@ -192,9 +192,11 @@ impl Rtt {
             }
 
             mem.resize(range.len(), 0);
-            let mut lock = session.lock().unwrap();
-            let mut core = lock.core(0)?;
-            core.read_8(range.start, mem.as_mut())?;
+            {
+                let mut lock = session.lock().unwrap();
+                let mut core = lock.core(0)?;
+                core.read_8(range.start, mem.as_mut())?;
+            }
 
             for offset in 0..(mem.len() - Self::MIN_SIZE) {
                 if let Some(rtt) = Rtt::from(
