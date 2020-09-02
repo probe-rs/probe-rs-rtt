@@ -11,18 +11,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-## [0.4.0]
-
-### Added
-
-- Added more logs on all levels.
-
-### Changed
-
-### Fixed
-
-- Fixed a bug where RTT would deadlock.
-
 ## [0.3.0]
 
 ### Added
