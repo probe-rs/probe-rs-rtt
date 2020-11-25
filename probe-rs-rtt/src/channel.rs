@@ -94,15 +94,15 @@ impl Channel {
     }
 
     fn read_pointers(&self, dir: &'static str) -> Result<(u32, u32), Error> {
-        let mut block = [0u8; 8];
+        let mut block = [0u32; 2];
         self.session
             .lock()
             .unwrap()
             .core(0)?
-            .read_8(self.ptr + Self::O_WRITE as u32, block.as_mut())?;
+            .read_32(self.ptr + Self::O_WRITE as u32, block.as_mut())?;
 
-        let write: u32 = block.pread_with(0, LE).unwrap();
-        let read: u32 = block.pread_with(4, LE).unwrap();
+        let write: u32 = block[0];
+        let read: u32 = block[1];
 
         let validate = |which, value| {
             if value >= self.size {
@@ -223,7 +223,7 @@ impl UpChannel {
             // Write read pointer back to target if something was read
             let mut lock = self.0.session.lock().unwrap();
             let mut core = lock.core(0)?;
-            core.write_8(self.0.ptr + Channel::O_READ as u32, &read.to_le_bytes())?;
+            core.write_word_32(self.0.ptr + Channel::O_READ as u32, read)?;
         }
 
         Ok(total)
@@ -329,7 +329,7 @@ impl DownChannel {
 
         let mut lock = self.0.session.lock().unwrap();
         let mut core = lock.core(0)?;
-        core.write_8(self.0.ptr + Channel::O_WRITE as u32, &write.to_le_bytes())?;
+        core.write_word_32(self.0.ptr + Channel::O_WRITE as u32, write)?;
 
         Ok(total)
     }
