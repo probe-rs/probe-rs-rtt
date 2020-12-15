@@ -380,7 +380,7 @@ fn read_c_string(
     let range = memory_map
         .iter()
         .filter_map(|r| match r {
-            MemoryRegion::Flash(r) => Some(&r.range),
+            MemoryRegion::Nvm(r) => Some(&r.range),
             MemoryRegion::Ram(r) => Some(&r.range),
             _ => None,
         })
