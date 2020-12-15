@@ -11,7 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-## [0.5.0]
+## [0.10.1]
+
+### Fixed
+
+- Fixed a bug where RTT pointers could be torn because of 8bit reads instead of 32bit reads.
+
+## [0.10.0]
 
 ### Changed
 
@@ -41,5 +47,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed some error in the docs.
 
-[Unreleased]: https://github.com/probe-rs/probe-rs/compare/v0.3.0...master
+[Unreleased]: https://github.com/probe-rs/probe-rs/compare/v0.10.1...master
+[0.10.1]: https://github.com/probe-rs/probe-rs/compare/v0.10.0...v0.10.1
+[0.10.0]: https://github.com/probe-rs/probe-rs/compare/v0.4.0...v0.10.0
+[0.4.0]: https://github.com/probe-rs/probe-rs/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/probe-rs/probe-rs/releases/tag/v0.3.0
