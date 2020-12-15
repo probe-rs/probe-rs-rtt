@@ -2,7 +2,7 @@ required_approvals = 1
 block_labels = ["wip"]
 delete_merged_branches = true
 status = [
-    "Check",
+    "Check (ubuntu-latest)",
     "Test Suite",
     "Rustfmt",
 ]
