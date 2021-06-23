@@ -1,6 +1,6 @@
 [package]
 name = "rtthost"
-version = "0.2.0"
+version = "0.11.0"
 edition = "2018"
 license = "MIT"
 authors = ["Matti Virkkunen <mvirkkunen@gmail.com>"]
