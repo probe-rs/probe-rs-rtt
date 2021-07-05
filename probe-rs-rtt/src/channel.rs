@@ -195,7 +195,7 @@ impl UpChannel {
 
             let mut lock = self.0.session.lock().unwrap();
             let mut core = lock.core(0)?;
-            core.read_8(self.0.buffer_ptr + read, &mut buf[..count])?;
+            core.read(self.0.buffer_ptr + read, &mut buf[..count])?;
 
             total += count;
             read += count as u32;
