@@ -156,7 +156,7 @@ impl Rtt {
     /// `core` can be e.g. an owned `Core` or a shared `Rc<Core>`. The session is only borrowed
     /// temporarily during detection.
     pub fn attach_region(session: Arc<Mutex<Session>>, region: &ScanRegion) -> Result<Rtt, Error> {
-        let memory_map: &[MemoryRegion] = &session.lock().unwrap().memory_map().to_vec();
+        let memory_map: &[MemoryRegion] = &session.lock().unwrap().target().memory_map.to_vec();
 
         let ranges: Vec<Range<u32>> = match region {
             ScanRegion::Exact(addr) => {

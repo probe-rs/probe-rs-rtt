@@ -1,6 +1,7 @@
 use probe_rs::{config::MemoryRegion, MemoryInterface, Session};
 use scroll::{Pread, LE};
 use std::cmp::min;
+use std::fmt;
 use std::io;
 use std::sync::{Arc, Mutex};
 
@@ -19,7 +20,6 @@ pub trait RttChannel {
     fn buffer_size(&self) -> usize;
 }
 
-#[derive(Debug)]
 pub(crate) struct Channel {
     session: Arc<Mutex<Session>>,
     number: usize,
@@ -27,6 +27,16 @@ pub(crate) struct Channel {
     name: Option<String>,
     buffer_ptr: u32,
     size: u32,
+}
+
+impl fmt::Debug for Channel {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "Channel: number: {}, ptr: {}, name: {:?}, buffer_ptr: {}, size: {}",
+            self.number, self.ptr, self.name, self.buffer_ptr, self.size
+        )
+    }
 }
 
 // Chanels must follow this data layout when reading/writing memory in order to be compatible with
