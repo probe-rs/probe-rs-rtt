@@ -1,9 +1,9 @@
 use probe_rs::{config::MemoryRegion, MemoryInterface, Session};
 use scroll::{Pread, LE};
 use std::cmp::min;
+use std::fmt;
 use std::io;
 use std::sync::{Arc, Mutex};
-use std::fmt;
 
 use crate::Error;
 
@@ -31,8 +31,11 @@ pub(crate) struct Channel {
 
 impl fmt::Debug for Channel {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Channel: number: {}, ptr: {}, name: {:?}, buffer_ptr: {}, size: {}",
-               self.number, self.ptr, self.name, self.buffer_ptr, self.size)
+        write!(
+            f,
+            "Channel: number: {}, ptr: {}, name: {:?}, buffer_ptr: {}, size: {}",
+            self.number, self.ptr, self.name, self.buffer_ptr, self.size
+        )
     }
 }
 
