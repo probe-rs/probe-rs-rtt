@@ -3,7 +3,8 @@ use scroll::{Pread, LE};
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::ops::Range;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use trace_mutex::Mutex;
 
 use crate::channel::*;
 use crate::{Channels, Error};

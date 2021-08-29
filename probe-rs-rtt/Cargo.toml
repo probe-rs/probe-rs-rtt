@@ -14,3 +14,4 @@ log = "0.4.8"
 probe-rs = { version = "0.11.0", git = "https://github.com/probe-rs/probe-rs" }
 scroll = "0.10.1"
 thiserror = "1.0.11"
+trace-mutex = { git = "https://github.com/jamesmunns/trace-mutex", rev = "6f5a95406d65c0280981503fb7f78a9265aced04" }

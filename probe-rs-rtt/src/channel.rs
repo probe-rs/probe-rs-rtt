@@ -2,7 +2,8 @@ use probe_rs::{config::MemoryRegion, MemoryInterface, Session};
 use scroll::{Pread, LE};
 use std::cmp::min;
 use std::io;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use trace_mutex::Mutex;
 
 use crate::Error;
 
